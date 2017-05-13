@@ -10,6 +10,7 @@
     "npm": "^4.2"
   },
   "scripts": {
+    "canvas": "apt-get install libcairo2-dev libjpeg62-turbo-dev libpango1.0-dev libgif-dev build-essential g++",
     "prebuild:meta": "node ./server/metadata/prebuild",
     "start": "node ./index"
   },
