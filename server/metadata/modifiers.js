@@ -1630,6 +1630,7 @@ $p.CatElm_visualization.prototype.__define({
 
 $p.on({
 
+  // обработчик события после загрузки данных в озу
 	pouch_load_data_loaded: function cat_formulas_data_loaded () {
 
 		$p.off(cat_formulas_data_loaded);
@@ -1662,7 +1663,13 @@ $p.CatFormulas.prototype.__define({
 
 			// создаём функцию из текста формулы
 			if(!this._data._formula && this.formula){
-        this._data._formula = (new Function("obj", this.formula)).bind(this);
+			  if(this.async){
+          const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+          this._data._formula = (new AsyncFunction("obj", this.formula)).bind(this);
+        }
+        else{
+          this._data._formula = (new Function("obj", this.formula)).bind(this);
+        }
       }
 
       const {_formula} = this._data;
