@@ -1844,7 +1844,7 @@ class Contour extends AbstractFilling(paper.Layer) {
       }
       if(row.is_set_row){
         let ok = false;
-        row.nom_set.get_spec(this, cache, true).each((sub_row) => {
+        row.nom.get_spec(this, cache, true).each((sub_row) => {
           if(set_handle_height(sub_row)){
             return !(ok = true);
           }
@@ -9378,15 +9378,14 @@ Scheme.prototype.zoom_fit = function () {
 
 // формирует json описания продукции с эскизами
 async function prod(ctx, next) {
-  const editor = new Editor();
+
+  const {project, view} = new Editor();
 
   const calc_order = await $p.doc.calc_order.get(ctx.params.ref, 'promise');
 
   const prod = await calc_order.load_production();
 
   const res = {number_doc: calc_order.number_doc};
-
-  const {project, view} = editor;
 
   for(let ox of prod){
 
@@ -9436,7 +9435,7 @@ async function prod(ctx, next) {
 
   setTimeout(() => {
     calc_order.unload();
-    editor.project.unload();
+    project.unload();
     for(let ox of prod){
       ox.unload();
     }
@@ -9448,6 +9447,58 @@ async function prod(ctx, next) {
 
 // формирует массив эскизов по параметрам запроса
 async function array(ctx, next) {
+
+  // отсортировать по заказам и изделиям
+  const grouped = $p.wsql.alasql('SELECT calc_order, product, elm FROM ? GROUP BY ROLLUP(calc_order, product, elm)', [JSON.parse(ctx.params.ref)]);
+  const res = [];
+
+  const {project, view} = new Editor();
+
+  let calc_order, ox, fragmented;
+  for(let img of grouped) {
+    if(img.product == null){
+      if(calc_order){
+        calc_order.unload();
+        calc_order = null;
+      }
+      if(img.calc_order){
+        calc_order = await $p.doc.calc_order.get(img.calc_order, 'promise');
+      }
+      continue;
+    }
+    if(img.elm == null){
+      if(ox){
+        ox.unload();
+        ox = null;
+      }
+      ox = await calc_order.production.get(img.product-1).characteristic.load();
+      await project.load(ox);
+      fragmented = false;
+      continue;
+    }
+
+    if(img.elm == 0){
+      if(fragmented){
+        await project.load(ox);
+      }
+    }
+    else{
+      fragmented = true;
+      project.draw_fragment({elm: img.elm});
+    }
+
+    res.push({
+      calc_order: img.calc_order,
+      product: img.product,
+      elm: img.elm,
+      img: view.element.toBuffer().toString('base64')
+    })
+  }
+
+  calc_order && calc_order.unload();
+  ox && ox.unload();
+
+  ctx.body = res;
 
 }
 
