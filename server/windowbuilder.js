@@ -9422,15 +9422,15 @@ async function prod(ctx, next) {
 
     ox.constructions.forEach(({cnstr}) => {
       project.draw_fragment({elm: -cnstr});
-      res[ref].imgs[`l${cnstr}`] = view.element.toBuffer().toString('base64');
-    });
+    res[ref].imgs[`l${cnstr}`] = view.element.toBuffer().toString('base64');
+  });
 
     ox.glasses.forEach(({elm}) => {
       project.draw_fragment({elm});
-      res[ref].imgs[`g${elm}`] = view.element.toBuffer().toString('base64');
-      elm = project.getItem({class: BuilderElement, elm});
-      elm && (elm.visible = false);
-    });
+    res[ref].imgs[`g${elm}`] = view.element.toBuffer().toString('base64');
+    elm = project.getItem({class: BuilderElement, elm});
+    elm && (elm.visible = false);
+  });
   }
 
   setTimeout(() => {
@@ -9448,7 +9448,7 @@ async function prod(ctx, next) {
 // формирует массив эскизов по параметрам запроса
 async function array(ctx, next) {
 
-  // отсортировать по заказам и изделиям
+// отсортировать по заказам и изделиям
   const grouped = $p.wsql.alasql('SELECT calc_order, product, elm FROM ? GROUP BY ROLLUP(calc_order, product, elm)', [JSON.parse(ctx.params.ref)]);
   const res = [];
 
@@ -9514,15 +9514,30 @@ async function svg(ctx, next) {
 
 module.exports = async (ctx, next) => {
 
-  switch (ctx.params.class){
-    case 'doc.calc_order':
-      return prod(ctx, next);
-    case 'array':
-      return array(ctx, next);
-    case 'png':
-      return png(ctx, next);
-    case 'svg':
-      return svg(ctx, next);
+  // если указано ограничение по ip - проверяем
+  const {restrict_ips} = ctx.app;
+  if(restrict_ips.length && restrict_ips.indexOf(ctx.ip) == -1){
+    ctx.status = 500;
+    ctx.body = `ip restricted (${ctx.ip})`;
+    return;
+  }
+
+  try{
+    switch (ctx.params.class){
+      case 'doc.calc_order':
+        return await prod(ctx, next);
+      case 'array':
+        return await array(ctx, next);
+      case 'png':
+        return await png(ctx, next);
+      case 'svg':
+        return await svg(ctx, next);
+    }
+  }
+  catch(err){
+    ctx.status = 500;
+    ctx.body = err.stack;
+    debug(err);
   }
 
 };
