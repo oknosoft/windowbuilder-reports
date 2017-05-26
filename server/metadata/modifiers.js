@@ -1924,20 +1924,11 @@ $p.cat.furns.__define({
               }
               else if(dop_row.offset_option == $p.enm.offset_options.ОтРучки){
                 // строим горизонтальную линию от нижней границы контура, находим пересечение и offset
-                const {bounds} = contour;
-                const by_side = contour.profiles_by_side();
-                const hor = (elm == by_side.top || elm == by_side.bottom) ?
-                  new paper.Path({
-                    insert: false,
-                    segments: [[bounds.left + contour.h_ruch, bounds.top - 200], [bounds.left + contour.h_ruch, bounds.bottom + 200]]
-                  }) :
-                  new paper.Path({
-                    insert: false,
-                    segments: [[bounds.left - 200, bounds.bottom - contour.h_ruch], [bounds.right + 200, bounds.bottom - contour.h_ruch]]
-                  });
-
-                coordin = elm.generatrix.getOffsetOf(elm.generatrix.intersect_point(hor)) -
-                  elm.generatrix.getOffsetOf(elm.generatrix.getNearestPoint(elm.corns(1)));
+                const {generatrix} = elm;
+                const hor = contour.handle_line(elm);
+                coordin = generatrix.getOffsetOf(generatrix.intersect_point(hor)) -
+                  generatrix.getOffsetOf(generatrix.getNearestPoint(elm.corns(1))) +
+                  (invert ? dop_row.contraction : -dop_row.contraction);
               }
               else{
 
@@ -2432,14 +2423,18 @@ $p.cat.inserts.__define({
      * @param elm {BuilderElement}
      * @param len_angl {Object}
      * @param ox {CatCharacteristics}
+     * @param spec {TabularSection}
      */
-    calculate_spec(elm, len_angl, ox) {
+    calculate_spec({elm, len_angl, ox, spec}) {
 
       const {_row} = elm;
       const {ПоПериметру, ПоШагам, ПоФормуле, ДляЭлемента, ПоПлощади} = $p.enm.count_calculating_ways;
       const {profile_items} = $p.enm.elm_types;
-      const spec = ox.specification;
       const {new_spec_row, calc_qty_len, calc_count_area_mass} = ProductsBuilding;
+
+      if(!spec){
+        spec = ox.specification;
+      }
 
       this.filtered_spec({elm, is_high_level_call: true, len_angl, ox}).forEach((row_ins_spec) => {
 
@@ -3044,64 +3039,64 @@ $p.CatProduction_params.prototype.__define({
  */
 
 
-$p.cat.users_acl.__define({
+$p.cat.users.__define({
 
+  // при загрузке пользователей, морозим объект, чтобы его невозможно было изменить из интерфейса
 	load_array: {
 		value: function(aattr, forse){
-
-			var ref, obj, res = [], acl;
-
-			for(var i in aattr){
-
-				ref = $p.utils.fix_guid(aattr[i]);
-
-				acl = aattr[i].acl;
-				if(acl)
-					delete aattr[i].acl;
-
-				if(!(obj = this.by_ref[ref])){
-					obj = new $p.CatUsers_acl(aattr[i], this);
-					if(forse)
-						obj._set_loaded();
-
-				}else if(obj.is_new() || forse){
-					obj._mixin(aattr[i]);
-					obj._set_loaded();
-				}
-
-				if(acl && !obj._acl){
-					var _acl = {};
-					for(var i in acl){
-						_acl.__define(i, {
-							value: {},
-							writable: false
-						});
-						for(var j in acl[i]){
-							_acl[i].__define(j, {
-								value: acl[i][j],
-								writable: false
-							});
-						}
-					}
-					obj.__define({
-						_acl: {
-							value: _acl,
-							writable: false
-						}
-					});
-				}
-
+			const res = [];
+			for(let aobj of aattr){
+			  if(!aobj.acl_objs){
+          aobj.acl_objs = [];
+        }
+        const {acl} = aobj;
+			  delete aobj.acl;
+        const obj = new $p.CatUsers(aobj, this);
+        const {_obj} = obj;
+        _obj._acl = acl;
+        obj._set_loaded();
+        Object.freeze(obj);
+        Object.freeze(_obj);
+        for(let j in _obj){
+          if(typeof _obj[j] == "object"){
+            Object.freeze(_obj[j]);
+            for(let k in _obj[j]){
+              typeof _obj[j][k] == "object" && Object.freeze(_obj[j][k]);
+            }
+          }
+        }
 				res.push(obj);
 			}
-
 			return res;
-		}
+		},
+    configurable: false
 	}
+
 });
 
-$p.CatUsers_acl.prototype.__define({
+$p.CatUsers.prototype.__define({
 
+  /**
+   * ### Роль доступна
+   *
+   * @param name {String}
+   * @returns {Boolean}
+   */
+  role_available: {
+    value: function (name) {
+      return this.acl_objs._obj.some(function (row) {
+        return row.type == name;
+      });
+    }
+  },
 
+  get_acl: {
+    value: function(class_name) {
+      const acn = class_name.split(".");
+      const {_acl} = this._obj;
+      return _acl && _acl[acn[0]] && _acl[acn[0]][acn[1]] ? _acl[acn[0]][acn[1]] : "e";
+    }
+  },
 
 	/**
 	 * ### Идентификаторы доступных контрагентов
@@ -3841,6 +3836,7 @@ $p.DpBuilder_price.prototype.__define({
       return $p.wsql.pouch.local.doc.query('doc/doc_nom_prices_setup_slice_last', {
         limit : 1000,
         include_docs: false,
+        reduce: false,
         startkey: [nom.ref, ''],
         endkey: [nom.ref, '\uffff']
       })
@@ -4110,22 +4106,19 @@ $p.doc.calc_order.on({
 	// после создания надо заполнить реквизиты по умолчанию: контрагент, организация, договор
 	after_create: function (attr) {
 
-	  const {acl_objs} = $p.current_acl;
+	  const {acl_objs} = $p.current_user;
 
 		//Организация
-		acl_objs.find_rows({by_default: true, type: $p.cat.organizations.metadata().obj_presentation}, (row) => {
+		acl_objs.find_rows({by_default: true, type: $p.cat.organizations.class_name}, (row) => {
       this.organization = row.acl_obj;
 			return false;
 		});
 
 		//Подразделение
-		acl_objs.find_rows({by_default: true, type: $p.cat.divisions.metadata().obj_presentation}, (row) => {
-      this.department = row.acl_obj;
-			return false;
-		});
+    $p.DocCalc_order.set_department.call(this)
 
 		//Контрагент
-		acl_objs.find_rows({by_default: true, type: $p.cat.partners.metadata().obj_presentation}, (row) => {
+		acl_objs.find_rows({by_default: true, type: $p.cat.partners.class_name}, (row) => {
       this.partner = row.acl_obj;
 			return false;
 		});
@@ -4170,6 +4163,18 @@ $p.doc.calc_order.on({
 		}else if(this.obj_delivery_state == Подтвержден){
 			this.obj_delivery_state = Отправлен;
 		}
+
+		// проверим заполненность подразделения
+    if(this.obj_delivery_state == Шаблон){
+      this.department = $p.utils.blank.guid;
+    }else if(this.department.empty()){
+      $p.msg.show_msg({
+        type: "alert-warning",
+        text: "Не заполнен реквизит 'офис продаж' (подразделение)",
+        title: this.presentation
+      });
+      return false;
+    }
 
 		this.production.each((row) => {
 
@@ -4270,7 +4275,7 @@ $p.doc.calc_order.on({
             extra_charge = $p.wsql.get_user_param("surcharge_internal", "number");
 
 					// если пересчет выполняется менеджером, используем наценку по умолчанию
-          if(!$p.current_acl.partners_uids.length || !extra_charge){
+          if(!$p.current_user.partners_uids.length || !extra_charge){
             $p.pricing.price_type(prm);
             extra_charge = prm.price_type.extra_charge_external;
           }
@@ -4662,11 +4667,11 @@ $p.doc.calc_order.on({
       let ro = false;
       // технолог может изменять шаблоны
       if(obj_delivery_state == Шаблон){
-        ro = !$p.current_acl.role_available("ИзменениеТехнологическойНСИ");
+        ro = !$p.current_user.role_available("ИзменениеТехнологическойНСИ");
       }
       // ведущий менеджер может изменять проведенные
       else if(posted || _deleted){
-        ro = !$p.current_acl.role_available("СогласованиеРасчетовЗаказов");
+        ro = !$p.current_user.role_available("СогласованиеРасчетовЗаказов");
       }
       else if(!obj_delivery_state.empty()){
         ro = obj_delivery_state != Черновик && obj_delivery_state != Отозван;
@@ -4791,7 +4796,7 @@ $p.doc.calc_order.on({
             get s() {return row_spec.s},
             get perimeter() {return [row_spec.len]}
           };
-          row_spec.inset.calculate_spec(elm, len_angl, row_prod.characteristic);
+          row_spec.inset.calculate_spec({elm, len_angl, ox: row_prod.characteristic});
 
           // сворачиваем
           row_prod.characteristic.specification.group_by("nom,clr,characteristic,len,width,s,elm,alp1,alp2,origin,dop", "qty,totqty,totqty1");
@@ -4809,6 +4814,24 @@ $p.doc.calc_order.on({
         resolve();
 
       });
+    }
+
+    /**
+     * Устанавливает подразделение по умолчанию
+     */
+    static set_department() {
+      const department = $p.wsql.get_user_param("current_department");
+      if(department){
+        this.department = department;
+      }
+      if(this.department.empty() || this.department.is_new()){
+        $p.current_user.acl_objs && $p.current_user.acl_objs.find_rows({by_default: true, type: $p.cat.divisions.class_name}, (row) => {
+          if(this.department != row.acl_obj){
+            this.department = row.acl_obj;
+          }
+          return false;
+        });
+      }
     }
 
   }

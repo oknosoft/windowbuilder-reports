@@ -290,13 +290,10 @@ class Contour extends AbstractFilling(paper.Layer) {
 
       // профили и доборы
       coordinates.find_rows({cnstr: this.cnstr, elm_type: {in: $p.enm.elm_types.profiles}}, (row) => {
-
         const profile = new Profile({row: row, parent: this});
-
         coordinates.find_rows({cnstr: row.cnstr, parent: {in: [row.elm, -row.elm]}, elm_type: $p.enm.elm_types.Добор}, (row) => {
           new ProfileAddl({row: row,	parent: profile});
         });
-
       });
 
       // заполнения
@@ -304,12 +301,14 @@ class Contour extends AbstractFilling(paper.Layer) {
         new Filling({row: row,	parent: this});
       });
 
+      // разрезы
+      coordinates.find_rows({cnstr: this.cnstr, elm_type: $p.enm.elm_types.Водоотлив}, (row) => {
+        new Sectional({row: row, parent: this});
+      });
+
       // остальные элементы (текст)
       coordinates.find_rows({cnstr: this.cnstr, elm_type: $p.enm.elm_types.Текст}, (row) => {
-
-        if(row.elm_type == $p.enm.elm_types.Текст){
-          new FreeText({row: row, parent: this.l_text});
-        }
+        new FreeText({row: row, parent: this.l_text});
       });
     }
 
@@ -1627,6 +1626,10 @@ class Contour extends AbstractFilling(paper.Layer) {
     return this.children.filter((elm) => elm instanceof Profile);
   }
 
+  get sectionals() {
+    return this.children.filter((elm) => elm instanceof Sectional);
+  }
+
   /**
    * Перерисовывает элементы контура
    * @method redraw
@@ -1667,6 +1670,9 @@ class Contour extends AbstractFilling(paper.Layer) {
 
     // рисуем подоконники
     this.draw_sill();
+
+    // перерисовываем все водоотливы контура
+    this.sectionals.forEach((elm) => elm.redraw());
 
     // информируем мир о новых размерах нашего контура
     $p.eve.callEvent("contour_redrawed", [this, this._attr._bounds]);
@@ -1799,14 +1805,32 @@ class Contour extends AbstractFilling(paper.Layer) {
   }
 
   /**
+   * Возаращает линию, проходящую через ручку
+   *
+   * @param elm {Profile}
+   */
+  handle_line(elm) {
+
+    // строим горизонтальную линию от нижней границы контура, находим пересечение и offset
+    const {bounds, h_ruch} = this;
+    const by_side = this.profiles_by_side();
+    return (elm == by_side.top || elm == by_side.bottom) ?
+      new paper.Path({
+        insert: false,
+        segments: [[bounds.left + h_ruch, bounds.top - 200], [bounds.left + h_ruch, bounds.bottom + 200]]
+      }) :
+      new paper.Path({
+        insert: false,
+        segments: [[bounds.left - 200, bounds.bottom - h_ruch], [bounds.right + 200, bounds.bottom - h_ruch]]
+      });
+
+  }
+
+  /**
    * Уточняет высоту ручки
    * @param cache {Object}
    */
   update_handle_height(cache) {
-
-    if(!cache){
-      cache = this.furn_cache;
-    }
 
     const {furn, _row} = this;
     const {furn_set, handle_side} = furn;
@@ -1814,8 +1838,16 @@ class Contour extends AbstractFilling(paper.Layer) {
       return;
     }
 
+    if(!cache){
+      cache = this.furn_cache;
+    }
+
     // получаем элемент, на котором ручка и длину элемента
     const elm = this.profile_by_furn_side(handle_side, cache);
+    if(!elm){
+      return;
+    }
+
     const {len} = elm._row;
 
     function set_handle_height(row){
@@ -1833,7 +1865,7 @@ class Contour extends AbstractFilling(paper.Layer) {
     }
 
     // бежим по спецификации набора в поисках строки про ручку
-    furn_set.specification.find_rows({dop: 0}, (row) => {
+    furn.furn_set.specification.find_rows({dop: 0}, (row) => {
 
       // проверяем, проходит ли строка
       if(!row.quantity || !row.check_restrictions(this, cache)){
@@ -2130,6 +2162,9 @@ class DimensionDrawer extends paper.Group {
     if(!parent.parent || forse){
 
       const by_side = parent.profiles_by_side();
+      if(!Object.keys(by_side).length){
+        return this.clear();
+      }
 
       // сначала, строим размерные линии импостов
 
@@ -2785,12 +2820,6 @@ class DimensionLineCustom extends DimensionLine {
 
     super(attr);
 
-    this.on({
-      mouseenter: this._mouseenter,
-      mouseleave: this._mouseleave,
-      click: this._click
-    });
-
   }
 
   /**
@@ -2826,7 +2855,18 @@ class DimensionLineCustom extends DimensionLine {
 
   _click(event) {
     event.stop();
-    this.selected = true;
+    if(paper.tool instanceof ToolRuler){
+      this.selected = true;
+    }
+  }
+
+  _mouseenter() {
+    if(paper.tool instanceof ToolRuler){
+      paper.canvas_cursor('cursor-arrow-ruler');
+    }
+    else{
+      paper.canvas_cursor('cursor-arrow-ruler-dis');
+    }
   }
 
 
@@ -3562,21 +3602,23 @@ class Filling extends AbstractFilling(BuilderElement) {
    */
   save_coordinates() {
 
-    const {_row, project, profiles, bounds, imposts} = this;
+    const {_row, project, profiles, bounds, imposts, nom} = this;
     const h = project.bounds.height + project.bounds.y;
     const cnns = project.connections.cnns;
     const length = profiles.length;
 
     // строка в таблице заполнений продукции
     project.ox.glasses.add({
-        elm: _row.elm,
-        nom: this.nom,
-        width: bounds.width,
-        height: bounds.height,
-        s: this.s,
-        is_rectangular: this.is_rectangular,
-        thickness: this.thickness
-      });
+      elm: _row.elm,
+      nom: nom,
+      formula: this.formula,
+      width: bounds.width,
+      height: bounds.height,
+      s: this.s,
+      is_rectangular: this.is_rectangular,
+      is_sandwich: nom.elm_type == $p.enm.elm_types.Заполнение,
+      thickness: this.thickness,
+    });
 
     let curr, prev,	next
 
@@ -3867,10 +3909,6 @@ class Filling extends AbstractFilling(BuilderElement) {
    */
   get is_rectangular() {
     return this.profiles.length === 4 && !this._attr.path.hasHandles();
-  }
-
-  get is_sandwich() {
-    return false;
   }
 
   get generatrix() {
@@ -4355,6 +4393,255 @@ class FreeText extends paper.PointText {
 
 }
 
+
+/**
+ * ### Элемент c образующей
+ * Виртуальный класс - BuilderElement, у которго есть образующая
+ *
+ * @class GeneratrixElement
+ * @extends BuilderElement
+ * @param attr {Object} - объект со свойствами создаваемого элемента см. {{#crossLink "BuilderElement"}}параметр конструктора BuilderElement{{/crossLink}}
+ * @constructor
+ * @menuorder 41
+ * @tooltip Элемент c образующей
+ */
+class GeneratrixElement extends BuilderElement {
+
+  constructor(attr = {}) {
+    const {generatrix} = attr;
+    if (generatrix) {
+      delete attr.generatrix;
+    }
+    super(attr);
+    if (generatrix) {
+      attr.generatrix = generatrix;
+    }
+    this.initialize(attr);
+  }
+
+  /**
+   * ### Координаты начала элемента
+   * @property b
+   * @type paper.Point
+   */
+  get b() {
+    const {generatrix} = this._attr;
+    return generatrix && generatrix.firstSegment.point;
+  }
+  set b(v) {
+    const {_rays, generatrix} = this._attr;
+    _rays.clear();
+    if(generatrix) generatrix.firstSegment.point = v;
+  }
+
+  /**
+   * Координаты конца элемента
+   * @property e
+   * @type Point
+   */
+  get e() {
+    const {generatrix} = this._attr;
+    return generatrix && generatrix.lastSegment.point;
+  }
+  set e(v) {
+    const {_rays, generatrix} = this._attr;
+    _rays.clear();
+    if(generatrix) generatrix.lastSegment.point = v;
+  }
+
+  /**
+   * ### Координата x начала профиля
+   *
+   * @property x1
+   * @type Number
+   */
+  get x1() {
+    const {bounds} = this.project;
+    return bounds ? (this.b.x - bounds.x).round(1) : 0;
+  }
+  set x1(v) {
+    const {bounds} = this.project;
+    if(bounds){
+      this.select_node("b");
+      this.move_points(new paper.Point(parseFloat(v) + bounds.x - this.b.x, 0));
+    }
+  }
+
+  /**
+   * ### Координата y начала профиля
+   *
+   * @property y1
+   * @type Number
+   */
+  get y1() {
+    const {bounds} = this.project;
+    return bounds ? (bounds.height + bounds.y - this.b.y).round(1) : 0;
+  }
+  set y1(v) {
+    const {bounds} = this.project;
+    if(bounds){
+      v = bounds.height + bounds.y - parseFloat(v);
+      this.select_node("b");
+      this.move_points(new paper.Point(0, v - this.b.y));
+    }
+  }
+
+  /**
+   * ###Координата x конца профиля
+   *
+   * @property x2
+   * @type Number
+   */
+  get x2() {
+    const {bounds} = this.project;
+    return bounds ? (this.e.x - bounds.x).round(1) : 0;
+  }
+  set x2(v) {
+    const {bounds} = this.project;
+    if(bounds){
+      this.select_node("e");
+      this.move_points(new paper.Point(parseFloat(v) + bounds.x - this.e.x, 0));
+    }
+  }
+
+  /**
+   * ### Координата y конца профиля
+   *
+   * @property y2
+   * @type Number
+   */
+  get y2() {
+    const {bounds} = this.project;
+    return bounds ? (bounds.height + bounds.y - this.e.y).round(1) : 0;
+  }
+  set y2(v) {
+    const {bounds} = this.project;
+    if(bounds){
+      v = bounds.height + bounds.y - parseFloat(v);
+      this.select_node("e");
+      this.move_points(new paper.Point(0, v - this.e.y));
+    }
+  }
+
+  /**
+   * ### Выделяет начало или конец профиля
+   *
+   * @method select_node
+   * @param node {String} b, e - начало или конец элемента
+   */
+  select_node(node) {
+    const {generatrix, project, _attr, view} = this;
+    project.deselect_all_points();
+    if(_attr.path){
+      _attr.path.selected = false;
+    }
+    if(node == "b"){
+      generatrix.firstSegment.selected = true;
+    }
+    else{
+      generatrix.lastSegment.selected = true;
+    }
+    view.update();
+  }
+
+  /**
+   * ### Двигает узлы
+   * Обрабатывает смещение выделенных сегментов образующей профиля
+   *
+   * @method move_points
+   * @param delta {paper.Point} - куда и насколько смещать
+   * @param [all_points] {Boolean} - указывает двигать все сегменты пути, а не только выделенные
+   * @param [start_point] {paper.Point} - откуда началось движение
+   */
+  move_points(delta, all_points, start_point) {
+
+    if(!delta.length){
+      return;
+    }
+
+    const	other = [];
+    const noti = {type: consts.move_points, profiles: [this], points: []};
+
+    let changed;
+
+    // если не выделено ни одного сегмента, двигаем все сегменты
+    if(!all_points){
+      all_points = !this.generatrix.segments.some((segm) => {
+        if (segm.selected)
+          return true;
+      });
+    }
+
+    this.generatrix.segments.forEach((segm) => {
+
+      let cnn_point;
+
+      if (segm.selected || all_points){
+
+        const noti_points = {old: segm.point.clone(), delta: delta};
+
+        // собственно, сдвиг узлов
+        const free_point = segm.point.add(delta);
+
+        if(segm.point == this.b){
+          cnn_point = this.rays.b;
+          if(!cnn_point.profile_point || paper.Key.isDown('control')){
+            cnn_point = this.cnn_point("b", free_point);
+          }
+        }
+        else if(segm.point == this.e){
+          cnn_point = this.rays.e;
+          if(!cnn_point.profile_point || paper.Key.isDown('control')){
+            cnn_point = this.cnn_point("e", free_point);
+          }
+        }
+
+        if(cnn_point && cnn_point.cnn_types == $p.enm.cnn_types.acn.t && (segm.point == this.b || segm.point == this.e)){
+          segm.point = cnn_point.point;
+        }
+        else{
+          segm.point = free_point;
+          // если соединение угловое диагональное, тянем тянем соседние узлы сразу
+          if(cnn_point && !paper.Key.isDown('control')){
+            if(cnn_point.profile && cnn_point.profile_point && !cnn_point.profile[cnn_point.profile_point].is_nearest(free_point)){
+              other.push(cnn_point.profile_point == "b" ? cnn_point.profile._attr.generatrix.firstSegment : cnn_point.profile._attr.generatrix.lastSegment );
+              cnn_point.profile[cnn_point.profile_point] = free_point;
+              noti.profiles.push(cnn_point.profile);
+            }
+          }
+        }
+
+        // накапливаем точки в нотификаторе
+        noti_points.new = segm.point;
+        if(start_point){
+          noti_points.start = start_point;
+        }
+        noti.points.push(noti_points);
+
+        changed = true;
+      }
+
+    });
+
+
+    // информируем систему об изменениях
+    if(changed){
+
+      this._attr._rays.clear();
+
+      this.layer && this.layer.notify && this.layer.notify(noti);
+
+      const notifier = Object.getNotifier(this);
+      notifier.notify({ type: 'update', name: "x1" });
+      notifier.notify({ type: 'update', name: "y1" });
+      notifier.notify({ type: 'update', name: "x2" });
+      notifier.notify({ type: 'update', name: "y2" });
+    }
+
+    return other;
+  }
+
+}
 
 /**
  * Расширения объектов paper.js
@@ -5124,19 +5411,7 @@ class ProfileRays {
  * @menuorder 41
  * @tooltip Элемент профиля
  */
-class ProfileItem extends BuilderElement {
-
-  constructor(attr = {}) {
-    const {generatrix} = attr;
-    if(generatrix){
-      delete attr.generatrix;
-    }
-    super(attr);
-    if(generatrix){
-      attr.generatrix = generatrix;
-    }
-    this.initialize(attr);
-  }
+class ProfileItem extends GeneratrixElement {
 
   /**
    * Расстояние от узла до внешнего ребра элемента
@@ -5158,128 +5433,44 @@ class ProfileItem extends BuilderElement {
     return this.d1 - this.width
   }
 
-  /**
-   * ### Координаты начала элемента
-   * @property b
-   * @type paper.Point
-   */
-  get b() {
-    const {generatrix} = this._attr;
-    return generatrix && generatrix.firstSegment.point;
-  }
-  set b(v) {
-    const {_rays, generatrix} = this._attr;
-    _rays.clear();
-    if(generatrix) generatrix.firstSegment.point = v;
-  }
 
   /**
-   * Координаты конца элемента
-   * @property e
-   * @type Point
-   */
-  get e() {
-    const {generatrix} = this._attr;
-    return generatrix && generatrix.lastSegment.point;
-  }
-  set e(v) {
-    const {_rays, generatrix} = this._attr;
-    _rays.clear();
-    if(generatrix) generatrix.lastSegment.point = v;
-  }
-
-  /**
-   * ### Точка corns(1)
+   * ### Точка проекции высоты ручки на внутреннее ребро профиля
    *
-   * @property bc
-   * @type Point
+   * @param side
+   * @return Point|undefined
    */
-  get bc() {
-    return this.corns(1);
-  }
-
-  /**
-   * ### Точка corns(2)
-   *
-   * @property ec
-   * @type Point
-   */
-  get ec() {
-    return this.corns(2);
-  }
-
-  /**
-   * ### Координата x начала профиля
-   *
-   * @property x1
-   * @type Number
-   */
-  get x1() {
-    const {bounds} = this.project;
-    return bounds ? (this.b.x - bounds.x).round(1) : 0;
-  }
-  set x1(v) {
-    const {bounds} = this.project;
-    if(bounds){
-      this.select_node("b");
-      this.move_points(new paper.Point(parseFloat(v) + bounds.x - this.b.x, 0));
+  hhpoint(side) {
+    const {layer, rays} = this;
+    const {h_ruch, furn} = layer;
+    const {furn_set, handle_side} = furn;
+    if(!h_ruch || !handle_side || furn_set.empty()){
+      return;
+    }
+    // получаем элемент, на котором ручка и длину элемента
+    if(layer.profile_by_furn_side(handle_side) == this){
+      return rays[side].intersect_point(layer.handle_line(this));
     }
   }
 
   /**
-   * ### Координата y начала профиля
+   * ### Точка проекции высоты ручки на внутреннее ребро профиля
    *
-   * @property y1
-   * @type Number
+   * @property hhi
+   * @type Point|undefined
    */
-  get y1() {
-    const {bounds} = this.project;
-    return bounds ? (bounds.height + bounds.y - this.b.y).round(1) : 0;
-  }
-  set y1(v) {
-    const {bounds} = this.project;
-    if(bounds){
-      v = bounds.height + bounds.y - parseFloat(v);
-      this.select_node("b");
-      this.move_points(new paper.Point(0, v - this.b.y));
-    }
+  get hhi() {
+    return this.hhpoint('inner');
   }
 
   /**
-   * ###Координата x конца профиля
+   * ### Точка проекции высоты ручки на внешнее ребро профиля
    *
-   * @property x2
-   * @type Number
+   * @property hho
+   * @type Point|undefined
    */
-  get x2() {
-    const {bounds} = this.project;
-    return bounds ? (this.e.x - bounds.x).round(1) : 0;
-  }
-  set x2(v) {
-    const {bounds} = this.project;
-    if(bounds){
-      this.select_node("e");
-      this.move_points(new paper.Point(parseFloat(v) + bounds.x - this.e.x, 0));
-    }
-  }
-
-  /**
-   * ### Координата y конца профиля
-   *
-   * @property y2
-   * @type Number
-   */
-  get y2() {
-    const {bounds} = this.project;
-    return bounds ? (bounds.height + bounds.y - this.e.y).round(1) : 0;
-  }
-  set y2(v) {
-    const {bounds} = this.project;
-    if(bounds){
-      v = bounds.height + bounds.y - parseFloat(v);
-      this.select_node("e");
-      this.move_points(new paper.Point(0, v - this.e.y));
-    }
+  get hho() {
+    return this.hhpoint('outer');
   }
 
   /**
@@ -5997,7 +6188,7 @@ class ProfileItem extends BuilderElement {
    *
    * @method postcalc_cnn
    * @param node {String} b, e - начало или конец элемента
-   * @returns CnnPoint
+   * @return CnnPoint
    */
   postcalc_cnn(node) {
     const cnn_point = this.cnn_point(node);
@@ -6246,24 +6437,6 @@ class ProfileItem extends BuilderElement {
     return igen.add(normal.multiply(d1).add(normal.multiply(d2)).divide(2));
   }
 
-  /**
-   * ### Выделяет начало или конец профиля
-   *
-   * @method select_node
-   * @param node {String} b, e - начало или конец элемента
-   */
-  select_node(node) {
-    const {generatrix, project, _attr, view} = this;
-    project.deselect_all_points();
-    _attr.path.selected = false;
-    if(node == "b"){
-      generatrix.firstSegment.selected = true;
-    }
-    else{
-      generatrix.lastSegment.selected = true;
-    }
-    view.update();
-  }
 
   /**
    * ### Выделяет сегмент пути профиля, ближайший к точке
@@ -6302,7 +6475,7 @@ class ProfileItem extends BuilderElement {
    * Вычисляется, как `is_linear()` {{#crossLink "BuilderElement/generatrix:property"}}образующей{{/crossLink}}
    *
    * @method is_linear
-   * @returns Boolean
+   * @return Boolean
    */
   is_linear() {
     return this.generatrix.is_linear();
@@ -6314,7 +6487,7 @@ class ProfileItem extends BuilderElement {
    *
    * @method is_nearest
    * @param p {ProfileItem}
-   * @returns Boolean
+   * @return Boolean
    */
   is_nearest(p) {
     return (this.b.is_nearest(p.b, true) || this.generatrix.getNearestPoint(p.b).is_nearest(p.b)) &&
@@ -6327,7 +6500,7 @@ class ProfileItem extends BuilderElement {
    *
    * @method is_collinear
    * @param p {ProfileItem}
-   * @returns Boolean
+   * @return Boolean
    */
   is_collinear(p) {
     let angl = p.e.subtract(p.b).getDirectedAngle(this.e.subtract(this.b));
@@ -6419,102 +6592,6 @@ class ProfileItem extends BuilderElement {
     return this;
   }
 
-  /**
-   * ### Двигает узлы
-   * Обрабатывает смещение выделенных сегментов образующей профиля
-   *
-   * @method move_points
-   * @param delta {paper.Point} - куда и насколько смещать
-   * @param [all_points] {Boolean} - указывает двигать все сегменты пути, а не только выделенные
-   * @param [start_point] {paper.Point} - откуда началось движение
-   */
-  move_points(delta, all_points, start_point) {
-
-    if(!delta.length){
-      return;
-    }
-
-    const	other = [];
-    const noti = {type: consts.move_points, profiles: [this], points: []};
-
-    let changed;
-
-    // если не выделено ни одного сегмента, двигаем все сегменты
-    if(!all_points){
-      all_points = !this.generatrix.segments.some((segm) => {
-        if (segm.selected)
-          return true;
-      });
-    }
-
-    this.generatrix.segments.forEach((segm) => {
-
-      let cnn_point;
-
-      if (segm.selected || all_points){
-
-        const noti_points = {old: segm.point.clone(), delta: delta};
-
-        // собственно, сдвиг узлов
-        const free_point = segm.point.add(delta);
-
-        if(segm.point == this.b){
-          cnn_point = this.rays.b;
-          if(!cnn_point.profile_point || paper.Key.isDown('control')){
-            cnn_point = this.cnn_point("b", free_point);
-          }
-        }
-        else if(segm.point == this.e){
-          cnn_point = this.rays.e;
-          if(!cnn_point.profile_point || paper.Key.isDown('control')){
-            cnn_point = this.cnn_point("e", free_point);
-          }
-        }
-
-        if(cnn_point && cnn_point.cnn_types == $p.enm.cnn_types.acn.t && (segm.point == this.b || segm.point == this.e)){
-          segm.point = cnn_point.point;
-        }
-        else{
-          segm.point = free_point;
-          // если соединение угловое диагональное, тянем тянем соседние узлы сразу
-          if(cnn_point && !paper.Key.isDown('control')){
-            if(cnn_point.profile && cnn_point.profile_point && !cnn_point.profile[cnn_point.profile_point].is_nearest(free_point)){
-              other.push(cnn_point.profile_point == "b" ? cnn_point.profile._attr.generatrix.firstSegment : cnn_point.profile._attr.generatrix.lastSegment );
-              cnn_point.profile[cnn_point.profile_point] = free_point;
-              noti.profiles.push(cnn_point.profile);
-            }
-          }
-        }
-
-        // накапливаем точки в нотификаторе
-        noti_points.new = segm.point;
-        if(start_point){
-          noti_points.start = start_point;
-        }
-        noti.points.push(noti_points);
-
-        changed = true;
-      }
-
-    });
-
-
-    // информируем систему об изменениях
-    if(changed){
-
-      this._attr._rays.clear();
-
-      this.layer && this.layer.notify && this.layer.notify(noti);
-
-      const notifier = Object.getNotifier(this);
-      notifier.notify({ type: 'update', name: "x1" });
-      notifier.notify({ type: 'update', name: "y1" });
-      notifier.notify({ type: 'update', name: "x2" });
-      notifier.notify({ type: 'update', name: "y2" });
-    }
-
-    return other;
-  }
 
   /**
    * ### Координаты вершин (cornx1...corny4)
@@ -6524,8 +6601,9 @@ class ProfileItem extends BuilderElement {
    * @return {Point|Number} - координата или точка
    */
   corns(corn) {
+    const {_corns} = this._attr;
     if(typeof corn == "number"){
-      return this._attr._corns[corn];
+      return _corns[corn];
     }
     else if(corn instanceof paper.Point){
 
@@ -6533,11 +6611,28 @@ class ProfileItem extends BuilderElement {
       let dist;
 
       for(let i = 1; i<5; i++){
-        dist = this._attr._corns[i].getDistance(corn);
+        dist = _corns[i].getDistance(corn);
         if(dist < res.dist){
           res.dist = dist;
-          res.point = this._attr._corns[i];
+          res.point = _corns[i];
           res.point_name = i;
+        }
+      }
+
+      const {hhi} = this;
+      if(hhi){
+        dist = hhi.getDistance(corn);
+        if(dist <= res.dist){
+          res.dist = hhi.getDistance(corn);
+          res.point = hhi;
+          res.point_name = "hhi";
+        }
+        const {hho} = this;
+        dist = hho.getDistance(corn);
+        if(dist <= res.dist){
+          res.dist = hho.getDistance(corn);
+          res.point = hho;
+          res.point_name = "hho";
         }
       }
 
@@ -6561,7 +6656,7 @@ class ProfileItem extends BuilderElement {
     else{
       const index = corn.substr(corn.length-1, 1);
       const axis = corn.substr(corn.length-2, 1);
-      return this._attr._corns[index][axis];
+      return _corns[index][axis];
     }
   }
 
@@ -8482,7 +8577,7 @@ class Scheme extends paper.Project {
 
       const {parent, layer} = item;
 
-      if(item instanceof paper.Path && parent instanceof ProfileItem){
+      if(item instanceof paper.Path && parent instanceof GeneratrixElement){
 
         if(profiles.indexOf(parent) != -1){
           return;
@@ -8580,20 +8675,23 @@ class Scheme extends paper.Project {
    * @method zoom_fit
    */
   zoom_fit(bounds) {
-    if(!bounds)
-      bounds = this.strokeBounds;
 
-    var height = (bounds.height < 1000 ? 1000 : bounds.height) + 320,
-      width = (bounds.width < 1000 ? 1000 : bounds.width) + 320,
-      shift;
+    if(!bounds){
+      bounds = this.strokeBounds;
+    }
+
+    const height = (bounds.height < 1000 ? 1000 : bounds.height) + 320;
+    const width = (bounds.width < 1000 ? 1000 : bounds.width) + 320;
+    let shift;
 
     if(bounds){
-      this.view.zoom = Math.min((this.view.viewSize.height - 20) / height, (this.view.viewSize.width - 20) / width);
-      shift = (this.view.viewSize.width - bounds.width * this.view.zoom) / 2;
+      const {view} = this;
+      view.zoom = Math.min((view.viewSize.height - 40) / height, (view.viewSize.width - 40) / width);
+      shift = (view.viewSize.width - bounds.width * view.zoom) / 2;
       if(shift < 180){
         shift = 0;
       }
-      this.view.center = bounds.center.add([shift, 40]);
+      view.center = bounds.center.add([shift, 60]);
     }
   }
 
@@ -9215,14 +9313,17 @@ class Scheme extends paper.Project {
       }
     }
     else{
-      this.activeLayer.profiles.some((p) => {
+      let dist = Infinity;
+      this.activeLayer.profiles.forEach((p) => {
         const corn = p.corns(point);
-        if(corn.dist < consts.sticking){
-          hit = {
-            item: p.generatrix,
-            point: corn.point
+        if(corn.dist < dist){
+          dist = corn.dist;
+          if(corn.dist < consts.sticking){
+            hit = {
+              item: p.generatrix,
+              point: corn.point
+            }
           }
-          return true;
         }
       })
     }
@@ -9312,8 +9413,210 @@ class Scheme extends paper.Project {
  * @constructor
  * @extends BuilderElement
  */
-class Sectional extends BuilderElement {
+class Sectional extends GeneratrixElement {
 
+  /**
+   * Вызывается из конструктора - создаёт пути и лучи
+   * @method initialize
+   * @private
+   */
+  initialize(attr) {
+
+    const {project, _attr, _row} = this;
+    const h = project.bounds.height + project.bounds.y;
+
+    _attr._rays = {
+      b: {},
+      e: {},
+      clear() {},
+    };
+
+    _attr.children = [];
+
+    _attr.zoom = 5;
+    _attr.radius = 40;
+
+    if(attr.generatrix) {
+      _attr.generatrix = attr.generatrix;
+    }
+    else {
+      if(_row.path_data) {
+        _attr.generatrix = new paper.Path(_row.path_data);
+      }
+      else{
+        const first_point = new paper.Point([_row.x1, h - _row.y1]);
+        _attr.generatrix = new paper.Path(first_point);
+        if(_row.r){
+          _attr.generatrix.arcTo(
+            first_point.arc_point(_row.x1, h - _row.y1, _row.x2, h - _row.y2,
+              _row.r + 0.001, _row.arc_ccw, false), [_row.x2, h - _row.y2]);
+        }
+        else{
+          _attr.generatrix.lineTo([_row.x2, h - _row.y2]);
+        }
+      }
+    }
+
+    _attr.generatrix.strokeColor = 'black';
+    _attr.generatrix.strokeWidth = 1;
+    _attr.generatrix.strokeScaling = false;
+
+    this.clr = _row.clr.empty() ? $p.job_prm.builder.base_clr : _row.clr;
+    //_attr.path.fillColor = new paper.Color(0.96, 0.98, 0.94, 0.96);
+
+    this.addChild(_attr.generatrix);
+
+  }
+
+  /**
+   * ### Формирует путь разреза
+   *
+   * @method redraw
+   * @return {Sectional}
+   * @chainable
+   */
+  redraw() {
+    const {layer, generatrix, _attr} = this;
+    const {children, zoom, radius} = _attr;
+    const {segments, curves} = generatrix;
+
+    // чистим углы и длины
+    for(let child of children){
+      child.remove();
+    }
+
+    // рисуем углы
+    for(let i = 1; i < segments.length - 1; i++){
+      this.draw_angle(i, radius);
+    }
+
+    // рисуем длины
+    for(let curve of curves){
+      const loc = curve.getLocationAtTime(0.5);
+      const normal = loc.normal.normalize(radius);
+      children.push(new paper.PointText({
+        point: loc.point.add(normal).add([0, normal.y < 0 ? 0 : normal.y / 2]),
+        content: (curve.length / zoom).toFixed(0),
+        fillColor: 'black',
+        fontSize: radius,
+        justification: 'center',
+        guide: true,
+        parent: layer,
+      }));
+    }
+
+
+    return this;
+  }
+
+  /**
+   * Рисует дуги и текст в углах
+   * @param ind
+   */
+  draw_angle(ind) {
+    const {layer, generatrix, _attr} = this;
+    const {children, zoom, radius} = _attr;
+    const {curves} = generatrix;
+    const c1 = curves[ind - 1];
+    const c2 = curves[ind];
+    const loc1 = c1.getLocationAtTime(0.9);
+    const loc2 = c2.getLocationAtTime(0.1);
+    const center = c1.point2;
+    let angle = loc2.tangent.angle - loc1.tangent.negate().angle;
+    if(angle < 0){
+      angle += 360;
+    }
+    if(angle > 180){
+      angle = 360 - angle;
+    }
+
+    if (c1.length < radius || c2.length < radius || 180 - angle < 1){
+      return;
+    }
+
+    const from = c1.getLocationAt(c1.length - radius).point;
+    const to = c2.getLocationAt(radius).point;
+    const end = center.subtract(from.add(to).divide(2)).normalize(radius).negate();
+    children.push(new paper.Path.Arc({
+      from,
+      through: center.add(end),
+      to,
+      strokeColor: 'grey',
+      guide: true,
+      parent: layer,
+    }));
+
+    // Angle Label
+    children.push(new paper.PointText({
+      point: center.add(end.multiply(angle < 40 ? 3 : 2).add([0, -end.y / 2])),
+      content: angle.toFixed(0) + '°',
+      fillColor: 'black',
+      fontSize: radius,
+      justification: 'center',
+      guide: true,
+      parent: layer,
+    }));
+
+  }
+
+  /**
+   * ### Вычисляемые поля в таблице координат
+   * @method save_coordinates
+   */
+  save_coordinates() {
+
+    const {_row, generatrix} = this;
+
+    if(!generatrix){
+      return;
+    }
+
+    _row.x1 = this.x1;
+    _row.y1 = this.y1;
+    _row.x2 = this.x2;
+    _row.y2 = this.y2;
+    _row.path_data = generatrix.pathData;
+    _row.nom = this.nom;
+
+
+    // добавляем припуски соединений
+    _row.len = this.length.round(1);
+
+    // устанавливаем тип элемента
+    _row.elm_type = this.elm_type;
+
+  }
+
+  /**
+   * заглушка для совместимости с профилем
+   */
+  cnn_point() {
+
+  }
+
+  /**
+   * Длина разреза
+   * @return {number}
+   */
+  get length() {
+    const {generatrix, zoom} = this._attr;
+    return generatrix.length / zoom;
+  }
+
+  /**
+   * Виртуальные лучи для совместимости с профилем
+   * @return {{b: {}, e: {}, clear: (function())}|*|ProfileRays}
+   */
+  get rays() {
+    return this._attr._rays;
+  }
+
+  /**
+   * Возвращает тип элемента (Водоотлив)
+   */
+  get elm_type() {
+    return $p.enm.elm_types.Водоотлив;
+  }
 }
 
 /**
@@ -9518,7 +9821,7 @@ module.exports = async (ctx, next) => {
   const {restrict_ips} = ctx.app;
   if(restrict_ips.length && restrict_ips.indexOf(ctx.ip) == -1){
     ctx.status = 500;
-    ctx.body = `ip restricted (${ctx.ip})`;
+    ctx.body = 'ip restricted:' + ctx.ip;
     return;
   }
 
