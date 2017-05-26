@@ -8397,8 +8397,9 @@ class Scheme extends paper.Project {
     l_dimensions.visible = false;
     l_connective.visible = false;
 
+    let elm;
     if(attr.elm > 0){
-      const elm = this.getItem({class: BuilderElement, elm: attr.elm});
+      elm = this.getItem({class: BuilderElement, elm: attr.elm});
       elm.draw_fragment && elm.draw_fragment();
     }
     else if(attr.elm < 0){
@@ -8414,6 +8415,7 @@ class Scheme extends paper.Project {
       })
     }
     this.view.update();
+    return elm;
   }
 
   /**
@@ -9725,15 +9727,18 @@ async function prod(ctx, next) {
 
     ox.constructions.forEach(({cnstr}) => {
       project.draw_fragment({elm: -cnstr});
-    res[ref].imgs[`l${cnstr}`] = view.element.toBuffer().toString('base64');
-  });
+      res[ref].imgs[`l${cnstr}`] = view.element.toBuffer().toString('base64');
+    });
 
-    ox.glasses.forEach(({elm}) => {
-      project.draw_fragment({elm});
-    res[ref].imgs[`g${elm}`] = view.element.toBuffer().toString('base64');
-    elm = project.getItem({class: BuilderElement, elm});
-    elm && (elm.visible = false);
-  });
+    ox.glasses.forEach((row) => {
+      const glass = project.draw_fragment({elm: row.elm});
+      // подтянем формулу стеклопакета
+      res[ref].imgs[`g${row.elm}`] = view.element.toBuffer().toString('base64');
+      if(glass){
+        row.formula = glass.formula;
+        glass.visible = false;
+      }
+    });
   }
 
   setTimeout(() => {
