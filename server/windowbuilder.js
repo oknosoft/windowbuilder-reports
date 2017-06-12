@@ -397,7 +397,7 @@ class Contour extends AbstractFilling(paper.Layer) {
           // и если существует соединение нашего со следующим
           if(curr.e.is_nearest(segm.b) && curr.profile.has_cnn(segm.profile, segm.b)){
 
-            if(curr.e.subtract(curr.b).getDirectedAngle(segm.e.subtract(segm.b)) >= 0)
+            if(segments.length < 3 || curr.e.subtract(curr.b).getDirectedAngle(segm.e.subtract(segm.b)) >= 0)
               curr.anext.push(segm);
           }
 
@@ -1061,59 +1061,61 @@ class Contour extends AbstractFilling(paper.Layer) {
       l_visualization._cnn = new paper.Group({ parent: l_visualization });
     }
 
+    const err_attrs = {
+      strokeColor: 'red',
+      strokeWidth: 2,
+      strokeCap: 'round',
+      strokeScaling: false,
+      dashOffset: 4,
+      dashArray: [4, 4],
+      guide: true,
+      parent: l_visualization._cnn,
+    }
+
     // ошибки соединений с заполнениями
     this.glasses(false, true).forEach((elm) => {
       let err;
       elm.profiles.forEach(({cnn, sub_path}) => {
         if(!cnn){
-          sub_path.parent = l_visualization._cnn;
-          sub_path.strokeWidth = 2;
-          sub_path.strokeScaling = false;
-          sub_path.strokeColor = 'red';
-          sub_path.strokeCap = 'round';
-          sub_path.dashArray = [12, 8];
+          Object.assign(sub_path, err_attrs);
           err = true;
         }
       });
-      elm.path.fillColor = err ? new paper.Color({
-        stops: ["#fee", "#fcc", "#fdd"],
-        origin: elm.path.bounds.bottomLeft,
-        destination: elm.path.bounds.topRight
-      }) : BuilderElement.clr_by_clr.call(elm, elm._row.clr, false);
+      if(err){
+        elm.fill_error();
+      }
+      else{
+        elm.path.fillColor = BuilderElement.clr_by_clr.call(elm, elm._row.clr, false);
+      }
     });
 
     // ошибки соединений профиля
     this.profiles.forEach((elm) => {
       const {b, e} = elm.rays;
       if(!b.cnn){
-        new paper.Path.Circle({
+        Object.assign(new paper.Path.Circle({
           center: elm.corns(4).add(elm.corns(1)).divide(2),
           radius: 80,
-          strokeColor: 'red',
-          strokeWidth: 2,
-          strokeCap: 'round',
-          strokeScaling: false,
-          dashOffset: 4,
-          dashArray: [4, 4],
-          guide: true,
-          parent: l_visualization._cnn
-        });
+        }), err_attrs);
       }
       if(!e.cnn){
-        new paper.Path.Circle({
+        Object.assign(new paper.Path.Circle({
           center: elm.corns(2).add(elm.corns(3)).divide(2),
           radius: 80,
-          strokeColor: 'red',
-          strokeWidth: 2,
-          strokeCap: 'round',
-          strokeScaling: false,
-          dashOffset: 4,
-          dashArray: [4, 4],
-          guide: true,
-          parent: l_visualization._cnn
-        });
+        }), err_attrs);
       }
+      // ошибки примыкающих соединений
+      if(elm.nearest() && (!elm._attr._nearest_cnn || elm._attr._nearest_cnn.empty())){
+        Object.assign(elm.path.get_subpath(elm.corns(1), elm.corns(2)), err_attrs);
+      }
+      // если у профиля есть доборы, проверим их соединения
+      elm.addls.forEach((elm) => {
+        if(elm.nearest() && (!elm._attr._nearest_cnn || elm._attr._nearest_cnn.empty())){
+          Object.assign(elm.path.get_subpath(elm.corns(1), elm.corns(2)), err_attrs);
+        }
+      })
     });
+
   }
 
   /**
@@ -3611,7 +3613,7 @@ class Filling extends AbstractFilling(BuilderElement) {
     project.ox.glasses.add({
       elm: _row.elm,
       nom: nom,
-      formula: this.formula,
+      formula: this.formula(),
       width: bounds.width,
       height: bounds.height,
       s: this.s,
@@ -3782,7 +3784,7 @@ class Filling extends AbstractFilling(BuilderElement) {
 
     if(is_rectangular){
       const {bounds} = path;
-      _attr._text.content = this.formula;
+      _attr._text.content = this.formula();
       _attr._text.point = bounds.bottomLeft.add([elm_font_size * 0.6, -elm_font_size]);
       if(_attr._text.bounds.width > (bounds.width - 2 * elm_font_size)){
         const atext = _attr._text.content.split(' ');
@@ -3874,6 +3876,15 @@ class Filling extends AbstractFilling(BuilderElement) {
     paths.forEach((p) => p != path && p.remove());
   }
 
+  fill_error() {
+    const {path} = this;
+    path.fillColor = new paper.Color({
+      stops: ["#fee", "#fcc", "#fdd"],
+      origin: path.bounds.bottomLeft,
+      destination: path.bounds.topRight
+    });
+  }
+
   get profiles() {
     return this._attr._profiles || [];
   }
@@ -3883,6 +3894,15 @@ class Filling extends AbstractFilling(BuilderElement) {
    */
   get imposts() {
     return this.getItems({class: Onlay});
+  }
+
+  /**
+   * Удаляет все раскладки заполнения
+   */
+  remove_onlays() {
+    for(let onlay of this.imposts){
+      onlay.remove();
+    }
   }
 
   /**
@@ -4100,19 +4120,25 @@ class Filling extends AbstractFilling(BuilderElement) {
    * Возвращает формулу (код состава) заполнения
    * @type String
    */
-  get formula() {
+  formula(by_art) {
     let res;
     this.project.ox.glass_specification.find_rows({elm: this.elm}, (row) => {
+      let {name, article} = row.inset;
       const aname = row.inset.name.split(' ');
-      const name = aname.length ? aname[0] : ''
+      if(by_art && article){
+        name = article;
+      }
+      else if(aname.length){
+        name = aname[0];
+      }
       if(!res){
         res = name;
       }
       else{
-        res += "x" + name;
+        res += (by_art ? '.' : 'x') + name;
       }
     });
-    return res || this.inset.name;
+    return res || (by_art ? this.inset.article || this.inset.name : this.inset.name);
   }
 
   // виртуальная ссылка для заполнений равна толщине
@@ -4129,7 +4155,7 @@ class Filling extends AbstractFilling(BuilderElement) {
         get: (target, prop) => {
           switch (prop){
             case 'presentation':
-              return this.formula;
+              return this.formula();
 
             case 'thickness':
               let res = 0;
@@ -4461,9 +4487,9 @@ class GeneratrixElement extends BuilderElement {
   }
   set x1(v) {
     const {bounds} = this.project;
-    if(bounds){
+    if(bounds && (v = parseFloat(v) + bounds.x - this.b.x)){
       this.select_node("b");
-      this.move_points(new paper.Point(parseFloat(v) + bounds.x - this.b.x, 0));
+      this.move_points(new paper.Point(v, 0));
     }
   }
 
@@ -4479,10 +4505,9 @@ class GeneratrixElement extends BuilderElement {
   }
   set y1(v) {
     const {bounds} = this.project;
-    if(bounds){
-      v = bounds.height + bounds.y - parseFloat(v);
+    if(bounds && (v = bounds.height + bounds.y - parseFloat(v) - this.b.y)){
       this.select_node("b");
-      this.move_points(new paper.Point(0, v - this.b.y));
+      this.move_points(new paper.Point(0, v));
     }
   }
 
@@ -4498,9 +4523,9 @@ class GeneratrixElement extends BuilderElement {
   }
   set x2(v) {
     const {bounds} = this.project;
-    if(bounds){
+    if(bounds && (v = parseFloat(v) + bounds.x - this.e.x)){
       this.select_node("e");
-      this.move_points(new paper.Point(parseFloat(v) + bounds.x - this.e.x, 0));
+      this.move_points(new paper.Point(v, 0));
     }
   }
 
@@ -4516,10 +4541,9 @@ class GeneratrixElement extends BuilderElement {
   }
   set y2(v) {
     const {bounds} = this.project;
-    if(bounds){
-      v = bounds.height + bounds.y - parseFloat(v);
+    if(bounds && (v = bounds.height + bounds.y - parseFloat(v) - this.e.y)){
       this.select_node("e");
-      this.move_points(new paper.Point(0, v - this.e.y));
+      this.move_points(new paper.Point(0, v));
     }
   }
 
@@ -4604,9 +4628,14 @@ class GeneratrixElement extends BuilderElement {
           // если соединение угловое диагональное, тянем тянем соседние узлы сразу
           if(cnn_point && !paper.Key.isDown('control')){
             if(cnn_point.profile && cnn_point.profile_point && !cnn_point.profile[cnn_point.profile_point].is_nearest(free_point)){
-              other.push(cnn_point.profile_point == "b" ? cnn_point.profile._attr.generatrix.firstSegment : cnn_point.profile._attr.generatrix.lastSegment );
-              cnn_point.profile[cnn_point.profile_point] = free_point;
-              noti.profiles.push(cnn_point.profile);
+              if(this instanceof Onlay){
+                this.move_nodes(noti_points.old, free_point);
+              }
+              else{
+                other.push(cnn_point.profile_point == "b" ? cnn_point.profile._attr.generatrix.firstSegment : cnn_point.profile._attr.generatrix.lastSegment );
+                cnn_point.profile[cnn_point.profile_point] = free_point;
+                noti.profiles.push(cnn_point.profile);
+              }
             }
           }
         }
@@ -4710,7 +4739,7 @@ Object.defineProperties(paper.Path.prototype, {
             da = curves[0].point1.getDirectedAngle(curves[0].point2), dc;
           for(var i = 1; i < curves.lenght; i++){
             dc = curves[i].point1.getDirectedAngle(curves[i].point2);
-            if(Math.abs(dc - da) > 0.01)
+            if(Math.abs(dc - da) > consts.epsilon)
               return false;
           }
         }
@@ -4929,7 +4958,7 @@ Object.defineProperties(paper.Point.prototype, {
 	is_nearest: {
 		value: function (point, sticking) {
 		  if(sticking === 0){
-        return Math.abs(this.x - point.x) < 0.01 && Math.abs(this.y - point.y) < 0.01;
+        return Math.abs(this.x - point.x) < consts.epsilon && Math.abs(this.y - point.y) < consts.epsilon;
       }
 			return this.getDistance(point, true) < (sticking ? consts.sticking2 : 16);
 		}
@@ -5049,7 +5078,7 @@ Object.defineProperties(paper.Point.prototype, {
         return 0;
       }
 	    const [dx, dy] = [(x1-x2), (y1-y2)];
-      return (h/2 + (dx * dx + dy * dy) / (8 * h)).round(1)
+      return (h/2 + (dx * dx + dy * dy) / (8 * h)).round(3);
     }
   },
 
@@ -5200,7 +5229,7 @@ class CnnPoint {
     this.err = null;
     this.distance = Infinity;
     this.cnn_types = $p.enm.cnn_types.acn.i;
-    if(this.cnn && this.cnn.cnn_type != $p.enm.cnn_types.tcn.i){
+    if(this.cnn && this.cnn.cnn_type != $p.enm.cnn_types.i){
       this.cnn = null;
     }
   }
@@ -5433,9 +5462,8 @@ class ProfileItem extends GeneratrixElement {
     return this.d1 - this.width
   }
 
-
   /**
-   * ### Точка проекции высоты ручки на внутреннее ребро профиля
+   * ### Точка проекции высоты ручки на ребро профиля
    *
    * @param side
    * @return Point|undefined
@@ -5594,7 +5622,7 @@ class ProfileItem extends GeneratrixElement {
         _row.arc_ccw = false;
       }
       _row.r = b.arc_r(b.x, b.y, e.x, e.y, v);
-      this.set_generatrix_radius();
+      this.set_generatrix_radius(v);
       Object.getNotifier(this).notify({
         type: 'update',
         name: 'r'
@@ -6057,24 +6085,27 @@ class ProfileItem extends GeneratrixElement {
   /**
    * Искривляет образующую в соответствии с радиусом
    */
-  set_generatrix_radius(h) {
+  set_generatrix_radius(height) {
     const {generatrix, _row, layer, project, selected} = this;
     const b = generatrix.firstSegment.point.clone();
     const e = generatrix.lastSegment.point.clone();
     const min_radius = b.getDistance(e) / 2;
 
-    if(!h){
-      h = project.bounds.height + project.bounds.y
-    }
-
     generatrix.removeSegments(1);
     generatrix.firstSegment.handleIn = null;
     generatrix.firstSegment.handleOut = null;
 
-    if(_row.r < min_radius){
-      _row.r = 0;
-    }else if(_row.r == min_radius){
-      _row.r += 0.001;
+    let full;
+    if(_row.r && _row.r <= min_radius){
+      _row.r = min_radius + 0.0001;
+      full = true;
+    }
+    if(height && height > min_radius){
+      height = min_radius;
+      Object.getNotifier(this).notify({
+        type: 'update',
+        name: 'arc_h'
+      });
     }
 
     if(selected){
@@ -6085,6 +6116,12 @@ class ProfileItem extends GeneratrixElement {
       let p = new paper.Point(b.arc_point(b.x, b.y, e.x, e.y, _row.r, _row.arc_ccw, false));
       if(p.point_pos(b.x, b.y, e.x, e.y) > 0 && !_row.arc_ccw || p.point_pos(b.x, b.y, e.x, e.y) < 0 && _row.arc_ccw){
         p = new paper.Point(b.arc_point(b.x, b.y, e.x, e.y, _row.r, !_row.arc_ccw, false));
+      }
+      if(full || height){
+        const start = b.add(e).divide(2);
+        const vector = p.subtract(start);
+        vector.normalize(height || min_radius);
+        p = start.add(vector);
       }
       generatrix.arcTo(p, e);
     }
@@ -6303,11 +6340,14 @@ class ProfileItem extends GeneratrixElement {
       };
     }
 
+    const {cnn_type} = cnn_point.cnn || {};
+    // импосты рисуем с учетом стороны примыкания
     if(cnn_point.is_t){
 
-      // для Т-соединений сначала определяем, изнутри или снаружи находится наш профиль
+      // при необходимости, перерисовываем ведущий элемент
       !cnn_point.profile.path.segments.length && cnn_point.profile.redraw();
 
+      // для Т-соединений сначала определяем, изнутри или снаружи находится наш профиль
       if(profile_point == "b"){
         // в зависимости от стороны соединения
         if(cnn_point.profile.cnn_side(this, null, prays) === $p.enm.cnn_sides.Снаружи){
@@ -6331,8 +6371,27 @@ class ProfileItem extends GeneratrixElement {
         }
       }
     }
-    else if(!cnn_point.profile_point || !cnn_point.cnn || cnn_point.cnn.cnn_type == $p.enm.cnn_types.tcn.i){
-      // соединение с пустотой
+    // для соединения крест в стык, отступаем ширину профиля
+    else if(cnn_type == $p.enm.cnn_types.xx) {
+      const {width} = this;
+      const l = profile_point == "b" ? width : generatrix.length - width;
+      const p = generatrix.getPointAt(l);
+      const n = generatrix.getNormalAt(l).normalize(width);
+      const np = new paper.Path({
+        insert: false,
+        segments: [p.subtract(n), p.add(n)],
+      });
+      if(profile_point == "b"){
+        intersect_point(np, rays.outer, 1);
+        intersect_point(np, rays.inner, 4);
+      }
+      else if(profile_point == "e"){
+        intersect_point(np, rays.outer, 2);
+        intersect_point(np, rays.inner, 3);
+      }
+    }
+    // соединение с пустотой
+    else if(!cnn_point.profile_point || !cnn_point.cnn || cnn_type == $p.enm.cnn_types.i){
       if(profile_point == "b"){
         normal = this.generatrix.firstCurve.getNormalAt(0, true);
         _corns[1] = this.b.add(normal.normalize(this.d1));
@@ -6344,8 +6403,8 @@ class ProfileItem extends GeneratrixElement {
         _corns[3] = this.e.add(normal.normalize(this.d2));
       }
     }
-    else if(cnn_point.cnn.cnn_type == $p.enm.cnn_types.tcn.ad){
-      // угловое диагональное
+    // угловое диагональное
+    else if(cnn_type == $p.enm.cnn_types.ad){
       if(profile_point == "b"){
         intersect_point(prays.outer, rays.outer, 1);
         intersect_point(prays.inner, rays.inner, 4);
@@ -6355,8 +6414,9 @@ class ProfileItem extends GeneratrixElement {
         intersect_point(prays.inner, rays.inner, 3);
       }
 
-    }else if(cnn_point.cnn.cnn_type == $p.enm.cnn_types.tcn.av){
-      // угловое к вертикальной
+    }
+    // угловое к вертикальной
+    else if(cnn_type == $p.enm.cnn_types.av){
       if(this.orientation == $p.enm.orientations.vert){
         if(profile_point == "b"){
           intersect_point(prays.outer, rays.outer, 1);
@@ -6379,8 +6439,8 @@ class ProfileItem extends GeneratrixElement {
         cnn_point.err = "orientation";
       }
     }
-    else if(cnn_point.cnn.cnn_type == $p.enm.cnn_types.tcn.ah){
-      // угловое к горизонтальной
+    // угловое к горизонтальной
+    else if(cnn_type == $p.enm.cnn_types.ah){
       if(this.orientation == $p.enm.orientations.vert){
         if(profile_point == "b"){
           intersect_point(prays.inner, rays.outer, 1);
@@ -6695,6 +6755,23 @@ class ProfileItem extends GeneratrixElement {
     return this.project.check_distance(element, this, res, point, check_only);
   }
 
+  max_right_angle(ares) {
+    const {generatrix} = this;
+    let has_a = true;
+    ares.forEach((res) => {
+      res._angle = generatrix.angle_to(res.profile.generatrix, res.point);
+      if(res._angle > 180){
+        res._angle = 360 - res._angle;
+      }
+    });
+    ares.sort((a, b) => {
+      const aa = Math.abs(a._angle - 90);
+      const ab = Math.abs(b._angle - 90);
+      return aa - ab;
+    });
+    return has_a;
+  }
+
 }
 
 
@@ -6802,7 +6879,7 @@ class Profile extends ProfileItem {
   }
 
   /**
-   * Примыкающий внешний элемент - имеет смысл для сегментов створок или доборов
+   * Примыкающий внешний элемент - имеет смысл для сегментов створок, доборов и рам с внешними соединителями
    * @property nearest
    * @type Profile
    */
@@ -6909,7 +6986,7 @@ class Profile extends ProfileItem {
         const pb = curr.cnn_point("b");
         if(pb.profile == this && pb.cnn){
 
-          if(pb.cnn.cnn_type == $p.enm.cnn_types.tcn.t){
+          if(pb.cnn.cnn_type == $p.enm.cnn_types.t){
             if(check_only){
               return true;
             }
@@ -6922,7 +6999,7 @@ class Profile extends ProfileItem {
 
         const pe = curr.cnn_point("e");
         if(pe.profile == this && pe.cnn){
-          if(pe.cnn.cnn_type == $p.enm.cnn_types.tcn.t){
+          if(pe.cnn.cnn_type == $p.enm.cnn_types.t){
             if(check_only){
               return true;
             }
@@ -6994,7 +7071,7 @@ class Profile extends ProfileItem {
 
     // Если привязка не нарушена, возвращаем предыдущее значение
     if(profile && profile.children.length){
-      if(this.check_distance(profile, res, point, true) === false){
+      if(this.check_distance(profile, res, point, true) === false || res.distance < consts.epsilon){
         return res;
       }
     }
@@ -7002,22 +7079,22 @@ class Profile extends ProfileItem {
     // TODO вместо полного перебора профилей контура, реализовать анализ текущего соединения и успокоиться, если соединение корректно
     res.clear();
     if(this.parent){
-      const profiles = this.parent.profiles;
-      const allow_open_cnn = this.project._dp.sys.allow_open_cnn;
+      const {profiles} = this.parent;
+      const {allow_open_cnn} = this.project._dp.sys;
       const ares = [];
 
       for(let i=0; i<profiles.length; i++){
-        if(this.check_distance(profiles[i], res, point, false) === false){
+        if(this.check_distance(profiles[i], res, point, false) === false || (res.distance < ((res.is_t || !res.is_l)  ? consts.sticking : consts.sticking_l))){
 
           // для простых систем разрывы профиля не анализируем
-          if(!allow_open_cnn){
-            if(res.profile == profile && res.profile_point == profile_point){
-              if(cnn && !cnn.empty() && res.cnn != cnn){
-                res.cnn = cnn;
-              }
-            }
-            return res;
-          }
+          // if(!allow_open_cnn){
+          //   if(res.profile == profile && res.profile_point == profile_point){
+          //     if(cnn && !cnn.empty() && res.cnn != cnn){
+          //       res.cnn = cnn;
+          //     }
+          //   }
+          //   return res;
+          // }
 
           ares.push({
             profile_point: res.profile_point,
@@ -7034,49 +7111,20 @@ class Profile extends ProfileItem {
       else if(ares.length >= 2){
         if(this.max_right_angle(ares)){
           res._mixin(ares[0]);
-          res.is_cut = true;
-
           // если установленное ранее соединение проходит по типу, нового не ищем
           if(cnn && res.cnn_types && res.cnn_types.indexOf(cnn.cnn_type) != -1 ){
             res.cnn = cnn;
           }
-
         }
         // и среди соединений нет углового диагонального, вероятно, мы находимся в разрыве - выбираем соединение с пустотой
         else{
           res.clear();
-          res.is_cut = true;
         }
+        res.is_cut = true;
       }
     }
 
     return res;
-  }
-
-  max_right_angle(ares) {
-    const {generatrix} = this;
-    let has_a = true;
-    ares.forEach((res) => {
-      res._angle = generatrix.angle_to(res.profile.generatrix, res.point);
-    });
-    ares.sort((a, b) => {
-      let aa = a._angle - 90;
-      let ab = b._angle - 90;
-      if(aa < 0){
-        aa += 180;
-      }
-      if(ab < 0){
-        ab += 180;
-      }
-      if(aa > 180){
-        aa -= 180;
-      }
-      if(ab > 180){
-        ab -= 180;
-      }
-      return aa - ab;
-    });
-    return has_a;
   }
 
   /**
@@ -7098,7 +7146,7 @@ class Profile extends ProfileItem {
         // обрабатываем угол
         if($p.enm.cnn_types.acn.a.indexOf(bcnn.cnn.cnn_type)!=-1 ){
           if(!this.b.is_nearest(p.e, 0)){
-            if(bcnn.is_t || bcnn.cnn.cnn_type == $p.enm.cnn_types.tcn.ad){
+            if(bcnn.is_t || bcnn.cnn.cnn_type == $p.enm.cnn_types.ad){
               if(paper.Key.isDown('control')){
                 console.log('control');
               }else{
@@ -7131,7 +7179,7 @@ class Profile extends ProfileItem {
         // обрабатываем угол
         if($p.enm.cnn_types.acn.a.indexOf(ecnn.cnn.cnn_type)!=-1 ){
           if(!this.e.is_nearest(p.b, 0)){
-            if(ecnn.is_t || ecnn.cnn.cnn_type == $p.enm.cnn_types.tcn.ad){
+            if(ecnn.is_t || ecnn.cnn.cnn_type == $p.enm.cnn_types.ad){
               if(paper.Key.isDown('control')){
                 console.log('control');
               }else{
@@ -7862,7 +7910,7 @@ class Onlay extends ProfileItem {
         }
       }
       else{
-        if(this.check_distance(res.profile, res, point, true) === false){
+        if(this.check_distance(res.profile, res, point, true) === false || res.distance < consts.epsilon){
           return res;
         }
       }
@@ -7911,11 +7959,28 @@ class Onlay extends ProfileItem {
       }
 
       // затем, если не привязалось - к сегментам раскладок текущего заполнения
-      glass.imposts.some((elm) => {
-        if (elm.project.check_distance(elm, null, res, point, "node_generatrix") === false ){
-          return true;
+      res.cnn_types = $p.enm.cnn_types.acn.t;
+      const ares = [];
+      for(let elm of glass.imposts){
+        if (elm !== this && elm.project.check_distance(elm, null, res, point, "node_generatrix") === false ){
+          ares.push({
+            profile_point: res.profile_point,
+            profile: res.profile,
+            cnn_types: res.cnn_types,
+            point: res.point});
         }
-      });
+      }
+
+      if(ares.length == 1){
+        res._mixin(ares[0]);
+      }
+      // если в точке сходятся 3 и более профиля, ищем тот, который смотрит на нас под максимально прямым углом
+      else if(ares.length >= 2){
+        if(this.max_right_angle(ares)){
+          res._mixin(ares[0]);
+        }
+        res.is_cut = true;
+      }
 
     });
 
@@ -7924,6 +7989,20 @@ class Onlay extends ProfileItem {
     }
 
     return res;
+  }
+
+  move_nodes(from, to) {
+    for(let elm of this.parent.imposts){
+      if(elm == this){
+        continue;
+      }
+      if(elm.b.is_nearest(from)){
+        elm.b = to;
+      }
+      if(elm.e.is_nearest(from)){
+        elm.e = to;
+      }
+    }
   }
 
 }
@@ -9052,7 +9131,7 @@ class Scheme extends paper.Project {
    * @returns {Boolean|undefined}
    */
   check_distance(element, profile, res, point, check_only) {
-    const _scheme = this;
+    const {allow_open_cnn} = this._dp.sys;
 
     let distance, gp, cnns, addls,
       bind_node = typeof check_only == "string" && check_only.indexOf("node") != -1,
@@ -9062,7 +9141,7 @@ class Scheme extends paper.Project {
     // Проверяет дистанцию в окрестности начала или конца соседнего элемента
     function check_node_distance(node) {
 
-      if((distance = element[node].getDistance(point)) < (_scheme._dp.sys.allow_open_cnn ? parseFloat(consts.sticking_l) : consts.sticking)){
+      if((distance = element[node].getDistance(point)) < (allow_open_cnn ? parseFloat(consts.sticking_l) : consts.sticking)){
 
         if(typeof res.distance == "number" && res.distance < distance)
           return 1;
@@ -9120,20 +9199,9 @@ class Scheme extends paper.Project {
       return;
 
     }
-    else if(node_distance = check_node_distance("b")){
-      // Если мы находимся в окрестности начала соседнего элемента
-      if(node_distance == 2)
-        return false;
-      else
-        return;
-
-    }else if(node_distance = check_node_distance("e")){
-      // Если мы находимся в окрестности конца соседнего элемента
-      if(node_distance == 2)
-        return false;
-      else
-        return;
-
+    // если мы находимся в окрестности начала соседнего элемента
+    else if((node_distance = check_node_distance("b")) || (node_distance = check_node_distance("e"))){
+      return node_distance == 2 ? false : void(0);
     }
 
     // это соединение с пустотой или T
@@ -9305,6 +9373,20 @@ class Scheme extends paper.Project {
    */
   hitPoints(point, tolerance, selected_first) {
     let item, hit;
+    let dist = Infinity;
+
+    function check_corns(elm) {
+      const corn = elm.corns(point);
+      if(corn.dist < dist){
+        dist = corn.dist;
+        if(corn.dist < consts.sticking){
+          hit = {
+            item: elm.generatrix,
+            point: corn.point
+          }
+        }
+      }
+    }
 
     // отдаём предпочтение сегментам выделенных путей
     if(selected_first){
@@ -9315,21 +9397,13 @@ class Scheme extends paper.Project {
       }
     }
     else{
-      let dist = Infinity;
-      this.activeLayer.profiles.forEach((p) => {
-        const corn = p.corns(point);
-        if(corn.dist < dist){
-          dist = corn.dist;
-          if(corn.dist < consts.sticking){
-            hit = {
-              item: p.generatrix,
-              point: corn.point
-            }
-          }
+      for(let elm of this.activeLayer.profiles){
+        check_corns(elm);
+        for(let addl of elm.addls){
+          check_corns(addl);
         }
-      })
+      };
     }
-
 
     // if(!tolerance && hit && hit.item.layer && hit.item.layer.parent){
     //   item = hit.item;
@@ -9394,6 +9468,13 @@ class Scheme extends paper.Project {
     // бежим по всем контурам, находим примыкания, исключаем их из результата
 
     return res;
+  }
+
+  /**
+   * Возвращает массив заполнений изделия
+   */
+  get glasses() {
+    return this.getItems({class: Filling});
   }
 
 }
@@ -9664,6 +9745,7 @@ const consts = new function Settings(){
 	}.bind(this);
 
 
+  this.epsilon = 0.01;
 	this.move_points = 'move_points';
 	this.move_handle = 'move_handle';
 	this.move_shapes = 'move-shapes';
@@ -9735,7 +9817,7 @@ async function prod(ctx, next) {
       // подтянем формулу стеклопакета
       res[ref].imgs[`g${row.elm}`] = view.element.toBuffer().toString('base64');
       if(glass){
-        row.formula = glass.formula;
+        row.formula = glass.formula(true);
         glass.visible = false;
       }
     });
