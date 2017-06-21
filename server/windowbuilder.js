@@ -1233,11 +1233,16 @@ class Contour extends AbstractFilling(paper.Layer) {
   draw_sill() {
     const {l_visualization, project, cnstr} = this;
     const {ox} = project;
+    const {properties} = $p.job_prm;
+    if(!properties){
+      return;
+    }
+    // указатели на параметры длина и ширина
+    const {length, width} = $p.job_prm.properties;
+
     ox.inserts.find_rows({cnstr}, (row) => {
       if (row.inset.insert_type == $p.enm.inserts_types.Подоконник) {
 
-        // ищем длину и ширину
-        const {length, width} = $p.job_prm.properties;
         const bottom = this.profiles_by_side("bottom");
         let vlen, vwidth;
         ox.params.find_rows({cnstr: cnstr, inset: row.inset}, (prow) => {
@@ -9767,7 +9772,7 @@ Scheme.prototype.zoom_fit = function () {
 async function prod(ctx, next) {
 
   const {project, view} = new Editor();
-
+  const {nom} = $p.cat;
   const calc_order = await $p.doc.calc_order.get(ctx.params.ref, 'promise');
 
   const prod = await calc_order.load_production();
@@ -9791,7 +9796,10 @@ async function prod(ctx, next) {
       },
       constructions: _obj.constructions,
       coordinates: _obj.coordinates,
-      specification: _obj.specification,
+      specification: _obj.specification.map((o) => {
+        const onom = nom.get(o.nom);
+        return Object.assign(o, {article: onom.article})
+      }),
       glasses: _obj.glasses,
       params: _obj.params,
       clr: _obj.clr,
