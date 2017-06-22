@@ -9774,9 +9774,7 @@ async function prod(ctx, next) {
   const {project, view} = new Editor();
   const {nom} = $p.cat;
   const calc_order = await $p.doc.calc_order.get(ctx.params.ref, 'promise');
-
   const prod = await calc_order.load_production();
-
   const res = {number_doc: calc_order.number_doc};
 
   for(let ox of prod){

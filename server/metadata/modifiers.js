@@ -335,12 +335,18 @@ $p.cat.characteristics.on({
 	// перед записью надо пересчитать наименование и рассчитать итоги
 	before_save: function (attr) {
 
+    let obj = this;
+    if(attr instanceof $p.CatCharacteristics){
+      obj = attr;
+      attr = arguments[1];
+    }
+
 		// уточняем номенклатуру системы
-    const {prod_nom, calc_order} = this;
+    const {prod_nom, calc_order} = obj;
 
     // контроль прав на запись характеристики
     if(calc_order.is_read_only){
-      this._data._err = {
+      obj._data._err = {
         title: 'Права доступа',
         type: 'alert-error',
         text: `Запрещено изменять заказ в статусе ${calc_order.obj_delivery_state}`
@@ -349,13 +355,13 @@ $p.cat.characteristics.on({
     }
 
 		// пересчитываем наименование
-		const name = this.prod_name();
+		const name = obj.prod_name();
 		if(name){
-      this.name = name;
+      obj.name = name;
     }
 
 		// дублируем контрагента для целей RLS
-		this.partner = calc_order.partner;
+    obj.partner = calc_order.partner;
 
 	},
 
@@ -1735,9 +1741,9 @@ $p.CatElm_visualization.prototype.__define({
 $p.on({
 
   // обработчик события после загрузки данных в озу
-	pouch_load_data_loaded: function cat_formulas_data_loaded () {
+	pouch_data_loaded: function cat_formulas_data_loaded () {
 
-    $p.off('pouch_load_data_loaded', cat_formulas_data_loaded);
+    $p.off('pouch_data_loaded', cat_formulas_data_loaded);
 
 		// читаем элементы из pouchdb и создаём формулы
 		$p.cat.formulas.pouch_find_rows({ _top: 500, _skip: 0 })
@@ -1769,10 +1775,10 @@ $p.CatFormulas.prototype.__define({
 			if(!this._data._formula && this.formula){
 			  if(this.async){
           const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
-          this._data._formula = (new AsyncFunction("obj", this.formula)).bind(this);
+          this._data._formula = (new AsyncFunction("obj,$p", this.formula)).bind(this);
         }
         else{
-          this._data._formula = (new Function("obj", this.formula)).bind(this);
+          this._data._formula = (new Function("obj,$p", this.formula)).bind(this);
         }
       }
 
@@ -1790,14 +1796,14 @@ $p.CatFormulas.prototype.__define({
         }
 
 				// получаем HTMLDivElement с отчетом
-				return _formula(obj)
+				return _formula(obj, $p)
 
 				  // показываем отчет в отдельном окне
 					.then((doc) => doc instanceof $p.SpreadsheetDocument && doc.print());
 
 			}
 			else{
-        return _formula && _formula(obj)
+        return _formula && _formula(obj, $p)
       }
 
 		}
@@ -3291,9 +3297,9 @@ $p.CatUsers.prototype.__define({
 
 	// Подписываемся на событие окончания загрузки локальных данных
 	$p.on({
-		pouch_load_data_loaded: function predefined_elmnts_data_loaded() {
+    pouch_data_loaded: function predefined_elmnts_data_loaded() {
 
-			$p.off('pouch_load_data_loaded', predefined_elmnts_data_loaded);
+			$p.off('pouch_data_loaded', predefined_elmnts_data_loaded);
 
 			// читаем элементы из pouchdb и создаём свойства
 			$p.cch.predefined_elmnts.pouch_find_rows({_raw: true, _top: 500, _skip: 0})
@@ -4377,15 +4383,21 @@ $p.doc.calc_order.on({
 	// при изменении реквизита
 	value_change: function (attr) {
 
+    let obj = this;
+    if(attr instanceof $p.DocCalc_order){
+      obj = attr;
+      attr = arguments[1];
+    }
+
 		// реквизиты шапки
 		if(attr.field == "organization"){
-			this.new_number_doc();
-			if(this.contract.organization != attr.value){
-        this.contract = $p.cat.contracts.by_partner_and_org(this.partner, attr.value);
+      obj.new_number_doc();
+			if(obj.contract.organization != attr.value){
+        obj.contract = $p.cat.contracts.by_partner_and_org(obj.partner, attr.value);
       }
 		}
-		else if(attr.field == "partner" && this.contract.owner != attr.value){
-			this.contract = $p.cat.contracts.by_partner_and_org(attr.value, this.organization);
+		else if(attr.field == "partner" && obj.contract.owner != attr.value){
+      obj.contract = $p.cat.contracts.by_partner_and_org(attr.value, obj.organization);
 
 		}
     // табчасть продукции
@@ -4429,7 +4441,7 @@ $p.doc.calc_order.on({
 				attr.row.amount_internal = (attr.row.price_internal * ((100 - attr.row.discount_percent_internal)/100) * attr.row.quantity).round(2);
 
 				// ставка и сумма НДС
-				if(this.vat_consider){
+				if(obj.vat_consider){
           const {НДС18, НДС18_118, НДС10, НДС10_110, НДС20, НДС20_120, НДС0, БезНДС} = $p.enm.vat_rates;
 					attr.row.vat_rate = attr.row.nom.vat_rate.empty() ? НДС18 : attr.row.nom.vat_rate;
 					switch (attr.row.vat_rate){
@@ -4450,7 +4462,7 @@ $p.doc.calc_order.on({
 							attr.row.vat_amount = 0;
 							break;
 					}
-					if(!this.vat_included){
+					if(!obj.vat_included){
 						attr.row.amount = (attr.row.amount + attr.row.vat_amount).round(2);
 					}
 				}
@@ -4459,8 +4471,8 @@ $p.doc.calc_order.on({
 					attr.row.vat_amount = 0;
 				}
 
-				this.doc_amount = this.production.aggregate([], ["amount"]).round(2);
-				this.amount_internal = this.production.aggregate([], ["amount_internal"]).round(2);
+        obj.doc_amount = obj.production.aggregate([], ["amount"]).round(2);
+        obj.amount_internal = obj.production.aggregate([], ["amount_internal"]).round(2);
 
 				// TODO: учесть валюту документа, которая может отличаться от валюты упр. учета и решить вопрос с amount_operation
 
@@ -4928,9 +4940,10 @@ $p.doc.calc_order.on({
      */
     process_add_product_list(dp) {
 
-      return new Promise((resolve, reject) => {
+      return new Promise(async (resolve, reject) => {
 
-        dp.production.forEach(async (row_spec) => {
+        for(let i = 0; i < dp.production.count(); i++){
+          const row_spec = dp.production.get(i);
           if(row_spec.inset.empty()){
             return;
           }
@@ -4974,7 +4987,7 @@ $p.doc.calc_order.on({
             save: true,
           }, true);
 
-        });
+        }
 
         resolve();
 
