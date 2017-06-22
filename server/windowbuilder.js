@@ -4680,7 +4680,7 @@ class GeneratrixElement extends BuilderElement {
 /**
  * Расширения объектов paper.js
  *
- * &copy; http://www.oknosoft.ru 2014-2015
+ * &copy; http://www.oknosoft.ru 2014-2017
  * @author	Evgeniy Malyarov
  *
  * @module geometry
@@ -5133,7 +5133,7 @@ Object.defineProperties(paper.Point.prototype, {
 
 /**
  * Created 24.07.2015<br />
- * &copy; http://www.oknosoft.ru 2014-2015
+ * &copy; http://www.oknosoft.ru 2014-2017
  * @author	Evgeniy Malyarov
  *
  * @module geometry
@@ -7756,7 +7756,8 @@ class ConnectiveLayer extends paper.Layer {
 
 /**
  * ### Раскладка
- * &copy; http://www.oknosoft.ru 2014-2015<br />
+ * &copy; Evgeniy Malyarov http://www.oknosoft.ru 2014-2017
+ * 
  * Created 16.05.2016
  *
  * @module geometry

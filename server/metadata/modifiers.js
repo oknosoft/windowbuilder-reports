@@ -2,9 +2,10 @@ module.exports = function($p) {
 /**
  * Дополнительные методы перечисления Типы соединений
  *
- * Created 23.12.2015<br />
- * &copy; http://www.oknosoft.ru 2014-2015
- * @author Evgeniy Malyarov
+ * &copy; Evgeniy Malyarov http://www.oknosoft.ru 2014-2017
+ *
+ * Created 23.12.2015
+ *
  * @module enm_cnn_types
  */
 
@@ -95,7 +96,9 @@ module.exports = function($p) {
 
 /**
  * Дополнительные методы перечисления Типы элементов
- * @author Evgeniy Malyarov
+ *
+ * &copy; Evgeniy Malyarov http://www.oknosoft.ru 2014-2017
+ *
  * @module enm_elm_types
  */
 
@@ -1823,7 +1826,7 @@ $p.CatFormulas.prototype.__define({
  * Дополнительные методы справочника Фурнитура
  *
  * Created 23.12.2015<br />
- * &copy; http://www.oknosoft.ru 2014-2015
+ * &copy; http://www.oknosoft.ru 2014-2017
  * @author Evgeniy Malyarov
  * @module cat_furns
  */
@@ -2218,7 +2221,7 @@ Object.defineProperties($p.cat.furns, {
  * Дополнительные методы справочника Вставки
  *
  * Created 23.12.2015<br />
- * &copy; http://www.oknosoft.ru 2014-2015
+ * &copy; http://www.oknosoft.ru 2014-2017
  * @author Evgeniy Malyarov
  * @module cat_inserts
  */
@@ -3020,7 +3023,7 @@ $p.CatPartners.prototype.__define({
  * Дополнительные методы справочника Системы (Параметры продукции)
  *
  * Created 23.12.2015<br />
- * &copy; http://www.oknosoft.ru 2014-2015
+ * &copy; http://www.oknosoft.ru 2014-2017
  * @author Evgeniy Malyarov
  * @module cat_production_params
  */
@@ -4895,12 +4898,22 @@ $p.doc.calc_order.on({
         return row;
       }
 
+      // ищем объект продукции в RAM
+      const mgr = $p.cat.characteristics;
+      let cx;
+      mgr.find_rows({calc_order: this, product: row.row}, (ox) => {
+        for(let ts in mgr.metadata().tabular_sections){
+          ox[ts].clear(true);
+        }
+        cx = Promise.resolve(ox);
+      });
+
       // объект продукции создаём, но из базы не читаем и пока не записываем
-      return $p.cat.characteristics.create({
+      return (cx || mgr.create({
         ref: $p.utils.generate_guid(),
         calc_order: this,
         product: row.row
-      }, true)
+      }, true))
         .then((ox) => {
           // устанавливаем характеристику в строке заказа
           row.characteristic = ox;
