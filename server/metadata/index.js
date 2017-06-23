@@ -62,8 +62,20 @@ $p.eve = {
   modifiers($p);
   debug('inited & modified');
 
-  // загружаем кешируемые справочники в ram
-  await $p.adapters.pouch.log_in(user_node.username, user_node.password);
+  // загружаем кешируемые справочники в ram и начинаем следить за изменениями ram
+  const {pouch} = $p.adapters;
+  await pouch.log_in(user_node.username, user_node.password);
+  pouch.local.ram.changes({
+    since: 'now',
+    live: true,
+    include_docs: true
+  }).on('change', (change) => {
+    // формируем новый
+    pouch.load_changes({docs: [change.doc]});
+  }).on('error', (err) => {
+    // handle errors
+  });
+
   debug('logged in');
 
 })();
