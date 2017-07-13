@@ -1091,31 +1091,21 @@ class Contour extends AbstractFilling(paper.Layer) {
 
     // ошибки соединений профиля
     this.profiles.forEach((elm) => {
-      const {b, e} = elm.rays;
-      if(!b.cnn){
-        Object.assign(new paper.Path.Circle({
-          center: elm.corns(4).add(elm.corns(1)).divide(2),
-          radius: 80,
-        }), err_attrs);
-      }
-      if(!e.cnn){
-        Object.assign(new paper.Path.Circle({
-          center: elm.corns(2).add(elm.corns(3)).divide(2),
-          radius: 80,
-        }), err_attrs);
-      }
+      const {_corns, _rays} = elm._attr;
+      // ошибки угловых соединений
+      _rays.b.check_err(err_attrs);
+      _rays.e.check_err(err_attrs);
       // ошибки примыкающих соединений
       if(elm.nearest() && (!elm._attr._nearest_cnn || elm._attr._nearest_cnn.empty())){
-        Object.assign(elm.path.get_subpath(elm.corns(1), elm.corns(2)), err_attrs);
+        Object.assign(elm.path.get_subpath(_corns[1], _corns[2]), err_attrs);
       }
       // если у профиля есть доборы, проверим их соединения
       elm.addls.forEach((elm) => {
         if(elm.nearest() && (!elm._attr._nearest_cnn || elm._attr._nearest_cnn.empty())){
-          Object.assign(elm.path.get_subpath(elm.corns(1), elm.corns(2)), err_attrs);
+          Object.assign(elm.path.get_subpath(_corns[1], _corns[2]), err_attrs);
         }
       })
     });
-
   }
 
   /**
@@ -1550,10 +1540,7 @@ class Contour extends AbstractFilling(paper.Layer) {
         }
         elm = new Profile({
           generatrix: curr.profile.generatrix.get_subpath(curr.b, curr.e),
-          proto: outer_nodes.length ? outer_nodes[0] : {
-            parent: this,
-            clr: this.project.default_clr()
-          }
+          proto: outer_nodes.length ? outer_nodes[0] : {parent: this, clr: curr.profile.clr}
         });
         elm._attr._nearest = curr.profile;
         elm._attr.binded = true;
@@ -1658,6 +1645,23 @@ class Contour extends AbstractFilling(paper.Layer) {
         sub_path,
       }
     })
+  }
+
+  /**
+   * Габариты по рёбрам периметра внутренней стороны профилей
+   * @param size
+   * @return {Rectangle}
+   */
+  bounds_inner (size) {
+    const path = new paper.Path({insert: false});
+    for(let curr of this.perimeter_inner(size)){
+      path.addSegments(curr.sub_path.segments);
+    }
+    if(path.segments.length && !path.closed){
+      path.closePath(true);
+    }
+    path.reduce();
+    return path.bounds;
   }
 
   /**
@@ -1902,16 +1906,20 @@ class Contour extends AbstractFilling(paper.Layer) {
     const {len} = elm._row;
 
     function set_handle_height(row){
-      const {handle_height_base} = row;
+      const {handle_height_base, fix_ruch} = row;
       if(handle_height_base < 0){
-        if(handle_height_base == -2 || (handle_height_base == -1 && _row.fix_ruch != -3)){
+        // если fix_ruch - устанавливаем по центру
+        if(fix_ruch || _row.fix_ruch != -3){
           _row.h_ruch = (len / 2).round(0);
-          return _row.fix_ruch = handle_height_base;
+          return _row.fix_ruch = fix_ruch ? -2 : -1;
         }
       }
       else if(handle_height_base > 0){
-        _row.h_ruch = handle_height_base;
-        return _row.fix_ruch = 1;
+        // если fix_ruch - устанавливаем по базовой высоте
+        if(fix_ruch || _row.fix_ruch != -3){
+          _row.h_ruch = handle_height_base;
+          return _row.fix_ruch = fix_ruch ? -2 : -1;
+        }
       }
     }
 
@@ -2189,7 +2197,7 @@ class DimensionDrawer extends paper.Group {
       }
     }
 
-    this.layer.parent && this.layer.parent.l_dimensions.clear();
+    this.layer && this.layer.parent && this.layer.parent.l_dimensions.clear();
   }
 
   /**
@@ -3477,6 +3485,30 @@ class BuilderElement extends paper.Group {
 
     super.remove();
   }
+
+  /**
+   * ### добавляет информацию об ошибке в спецификацию, если таковой нет для текущего элемента
+   * @param critical {Boolean}
+   * @param text {String}
+   */
+  err_spec_row(nom, text) {
+    if(!nom){
+      nom = $p.job_prm.nom.info_error;
+    }
+    const {ox} = this.project;
+    if(!ox.specification.find_rows({elm: this.elm, nom}).length){
+      $p.ProductsBuilding.new_spec_row({
+        elm: this,
+        row_base: {clr: $p.cat.clrs.get(), nom},
+        spec: ox.specification,
+        ox,
+      });
+    };
+    if(text){
+
+    }
+  }
+
 
   static clr_by_clr(clr, view_out) {
     let {clr_str, clr_in, clr_out} = clr;
@@ -4908,7 +4940,7 @@ Object.defineProperties(paper.Path.prototype, {
       value: function (delta) {
 
         if(delta){
-          var tangent = this.getTangentAt(0);
+          let tangent = this.getTangentAt(0);
           if(this.is_linear()) {
             this.firstSegment.point = this.firstSegment.point.add(tangent.multiply(-delta));
             this.lastSegment.point = this.lastSegment.point.add(tangent.multiply(delta));
@@ -4918,9 +4950,7 @@ Object.defineProperties(paper.Path.prototype, {
             this.add(this.lastSegment.point.add(tangent.multiply(delta)));
           }
         }
-
         return this;
-
       }
     },
 
@@ -5296,6 +5326,27 @@ class CnnPoint {
     }
     else if(this._err.indexOf(v) == -1){
       this._err.push(v);
+    }
+  }
+
+  /**
+   * Проверяет ошибки в узле профиля
+   * @param style
+   */
+  check_err(style) {
+    const {_node, _parent, cnn} = this;
+    const {_corns, _rays} = _parent._attr;
+    const len = _node == 'b' ? _corns[1].getDistance(_corns[4]) : _corns[2].getDistance(_corns[3]);
+    if(!cnn || (cnn.lmin > 0 && cnn.lmin > len) || (cnn.lmax > 0 && cnn.lmax < len)){
+      if(style){
+        Object.assign(new paper.Path.Circle({
+          center: _node == 'b' ? _corns[4].add(_corns[1]).divide(2) : _corns[2].add(_corns[3]).divide(2),
+          radius: 80,
+        }), style);
+      }
+      else{
+        _parent.err_spec_row($p.job_prm.nom.critical_error, cnn ? $p.msg.err_seam_len : $p.msg.err_no_cnn);
+      }
     }
   }
 
@@ -6217,6 +6268,7 @@ class ProfileItem extends GeneratrixElement {
         // прибиваем соединения в точках b и e
         const b = this.cnn_point('b');
         const e = this.cnn_point('e');
+        const {cnns} = project.connections;
 
         if(b.profile && b.profile_point == 'e'){
           const {_rays} = b.profile._attr;
@@ -6233,18 +6285,25 @@ class ProfileItem extends GeneratrixElement {
           }
         }
 
-        const {cnns} = project.connections;
+        // прибиваем соединения примыкающих к текущему импостов
+        const imposts = this.joined_imposts();
+        const elm2 = this.elm;
+        for(const {profile} of imposts.inner.concat(imposts.outer)){
+          const {b, e} = profile.rays;
+          b.profile == this && b.clear(true);
+          e.profile == this && e.clear(true);
+        }
+
         // для соединительных профилей и элементов со створками, пересчитываем соседей
-        this.joined_nearests().forEach((profile) => {
-          const {_attr, elm} = profile;
+        for(const {_attr, elm} of this.joined_nearests()){
           _attr._rays && _attr._rays.clear(true);
           _attr._nearest_cnn = null;
-          cnns.clear({elm1: elm, elm2: this.elm});
-        });
+          cnns.clear({elm1: elm, elm2});
+        }
 
         // так же, пересчитываем соединения с примыкающими заполнениями
         this.layer.glasses(false, true).forEach((glass) => {
-          cnns.clear({elm1: glass.elm, elm2: this.elm});
+          cnns.clear({elm1: glass.elm, elm2});
         })
       }
 
@@ -6890,10 +6949,10 @@ class Profile extends ProfileItem {
    * Возвращает тип элемента (рама, створка, импост)
    */
   get elm_type() {
-    const {_rays} = this._attr;
+    const {_rays, _nearest} = this._attr;
 
     // если начало или конец элемента соединены с соседями по Т, значит это импост
-    if(_rays && (_rays.b.is_tt || _rays.e.is_tt)){
+    if(_rays && !_nearest && (_rays.b.is_tt || _rays.e.is_tt)){
       return $p.enm.elm_types.Импост;
     }
 
@@ -7183,10 +7242,10 @@ class Profile extends ProfileItem {
     let moved_fact;
 
     if(p instanceof ProfileConnective){
-      const {generatrix} = p;
+      const gen = p.generatrix.clone({insert: false}).elongation(1000);
       this._attr._rays.clear();
-      this.b = generatrix.getNearestPoint(this.b);
-      this.e = generatrix.getNearestPoint(this.e);
+      this.b = gen.getNearestPoint(this.b);
+      this.e = gen.getNearestPoint(this.e);
       moved_fact = true;
     }
     else{
@@ -7661,7 +7720,7 @@ class ProfileConnective extends ProfileItem {
     super.move_points(delta, all_points, start_point);
 
     // двигаем примыкающие
-    if(all_points !== false){
+    if(all_points !== false && !paper.Key.isDown('control')){
       nearests.forEach((np) => {
         np.do_bind(this, null, null, moved);
         // двигаем связанные с примыкающими
@@ -7717,13 +7776,6 @@ class ProfileConnective extends ProfileItem {
 
     const {_row, rays, project, generatrix} = this;
     const {cnns} = project.connections;
-
-    // row_b = cnns.add({
-    //   elm1: _row.elm,
-    //   node1: "b",
-    //   cnn: b.cnn ? b.cnn.ref : "",
-    //   aperture_len: this.corns(1).getDistance(this.corns(4))
-    // })
 
     _row.x1 = this.x1;
     _row.y1 = this.y1;
@@ -7795,7 +7847,13 @@ class ConnectiveLayer extends paper.Layer {
   save_coordinates() {
     this.children.forEach((elm) => elm.save_coordinates())
   }
+
+  glasses() {
+    return [];
+  }
 }
+
+Editor.ProfileConnective = ProfileConnective;
 
 /**
  * ### Раскладка
@@ -8237,6 +8295,9 @@ class Scheme extends paper.Project {
 
       if(_scheme.contours.length){
 
+        // перерисовываем соединительные профили
+        _scheme.l_connective.redraw();
+
         // перерисовываем все контуры
         for(let contour of _scheme.contours){
           contour.redraw();
@@ -8244,8 +8305,6 @@ class Scheme extends paper.Project {
             return;
           }
         }
-
-        // пересчитываем параметры изделия и фурнитур, т.к. они могут зависеть от размеров
 
         // если перерисованы все контуры, перерисовываем их размерные линии
         _attr._bounds = null;
@@ -8259,9 +8318,6 @@ class Scheme extends paper.Project {
 
         // перерисовываем габаритные размерные линии изделия
         _scheme.draw_sizes();
-
-        // перерисовываем соединительные профили
-        _scheme.l_connective.redraw();
 
         // обновляем изображение на эуране
         _scheme.view.update();
@@ -8417,7 +8473,7 @@ class Scheme extends paper.Project {
       });
 
       // первым делом создаём соединители
-      o.coordinates.find_rows({cnstr: 0, elm_type: $p.enm.elm_types.Соединитель}, (row) => new ProfileConnective({row: row}));
+      o.coordinates.find_rows({elm_type: $p.enm.elm_types.Соединитель}, (row) => new ProfileConnective({row: row}));
       o = null;
 
       // создаём семейство конструкций
@@ -9750,6 +9806,8 @@ class Sectional extends GeneratrixElement {
     return $p.enm.elm_types.Водоотлив;
   }
 }
+
+Editor.Sectional = Sectional;
 
 /**
  * ### Движок графического построителя
