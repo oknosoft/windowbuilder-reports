@@ -5,8 +5,8 @@ require('./observe');
 const debug = require('debug')('wb:meta');
 
 // конструктор MetaEngine
-const MetaEngine = require('../../node_modules/metadata-core').default
-  .plugin(require('../../node_modules/metadata-pouchdb').default);
+const MetaEngine = require('metadata-core')
+  .plugin(require('metadata-pouchdb'));
 debug('required');
 
 // создаём контекст MetaEngine
