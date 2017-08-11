@@ -13,11 +13,29 @@ class Editor extends paper.PaperScope {
 
     super();
 
+    /**
+     * Собственный излучатель событий для уменьшения утечек памяти
+     */
+    this.eve = new (Object.getPrototypeOf($p.md.constructor))();
+
+    this._undo = {
+      clear() {
+
+      },
+      save_snapshot() {
+
+      }
+    }
+
     // уточняем константы
     consts.tune_paper(this.settings);
 
     // создаём экземпляр проекта Scheme
     this.create_scheme(format);
+  }
+
+  set_text() {
+
   }
 
   create_scheme(format = 'png') {
@@ -1014,7 +1032,9 @@ class Contour extends AbstractFilling(paper.Layer) {
     const ib = this.l_visualization._by_insets.bounds;
     if (ib.height && ib.bottom > bounds.bottom) {
       const delta = ib.bottom - bounds.bottom + 10;
-      bounds = bounds.unite(new paper.Rectangle(bounds.bottomLeft, bounds.bottomRight.add([0, delta < 250 ? delta * 1.1 : delta * 1.2])));
+      bounds = bounds.unite(
+        new paper.Rectangle(bounds.bottomLeft, bounds.bottomRight.add([0, delta < 250 ? delta * 1.1 : delta * 1.2]))
+      );
     }
     return bounds;
   }
@@ -7810,7 +7830,7 @@ Editor.ProfileConnective = ProfileConnective;
 /**
  * ### Раскладка
  * &copy; Evgeniy Malyarov http://www.oknosoft.ru 2014-2017
- *
+ * 
  * Created 16.05.2016
  *
  * @module geometry
@@ -9883,7 +9903,7 @@ async function prod(ctx, next) {
       product: _obj.product,
     };
 
-    if(_obj.coordinates.length){
+    if(_obj.coordinates && _obj.coordinates.length){
 
       await project.load(ox);
       res[ref].imgs = {
@@ -9908,11 +9928,15 @@ async function prod(ctx, next) {
   }
 
   setTimeout(() => {
-    calc_order.unload();
-    project.unload();
-    for(let ox of prod){
-      ox.unload();
+    try{
+      calc_order.unload();
+      project.unload();
+      for(let ox of prod){
+        ox.unload();
+      };
+      prod.length = 0;
     }
+    catch(err){}
   });
 
   //ctx.body = `Prefix: ${ctx.route.prefix}, path: ${ctx.route.path}`;

@@ -1,4 +1,3 @@
-
 // дополняем прототип Object методами observe
 require('./observe');
 
@@ -14,30 +13,10 @@ const $p = new MetaEngine();
 debug('created');
 
 // эмулируем излучатель событий dhtmlx
-$p.eve = {
+require('./dhtmlx_eve')($p);
 
-  cache: {},
-
-  callEvent(type, args) {
-    $p.md.emit(type, args);
-  },
-
-  attachEvent(type, listener) {
-    $p.md.on(type, listener);
-    const id = $p.utils.generate_guid();
-    this.cache[id] = [type, listener];
-    return id;
-  },
-
-  detachEvent(id) {
-    const ev = this.cache[id];
-    if(ev){
-      $p.md.off(ev[0], ev[1]);
-      delete this.cache[id];
-    }
-  }
-
-};
+// обеспечиваем совместимость DataManager с v0.12
+require('./meta_pouchdb')($p.classes.DataManager.prototype);
 
 
 // инициализируем параметры сеанса и метаданные
@@ -64,19 +43,39 @@ $p.eve = {
 
   // загружаем кешируемые справочники в ram и начинаем следить за изменениями ram
   const {pouch} = $p.adapters;
-  await pouch.log_in(user_node.username, user_node.password);
-  pouch.local.ram.changes({
-    since: 'now',
-    live: true,
-    include_docs: true
-  }).on('change', (change) => {
-    // формируем новый
-    pouch.load_changes({docs: [change.doc]});
-  }).on('error', (err) => {
-    // handle errors
-  });
+  pouch.log_in(user_node.username, user_node.password)
+    .catch((err) => debug(err));
 
-  debug('logged in');
+  pouch.on({
+    user_log_in(name) {
+      debug(`logged in ${$p.job_prm.couch_local}, user:${name}, zone:${$p.job_prm.zone}`);
+    },
+    user_log_fault(err) {
+      debug(`login error ${err}`);
+    },
+    pouch_load_start(page) {
+      debug('loadind to ram: start');
+    },
+    pouch_data_page(page) {
+      debug(`loadind to ram: page №${page.page}, written ${page.docs_written} docs`);
+    },
+    pouch_complete_loaded(page) {
+      debug(`ready to receive queries, listen on port: ${process.env.PORT || 3000}`);
+    },
+    pouch_doc_ram_loaded() {
+      pouch.local.ram.changes({
+        since: 'now',
+        live: true,
+        include_docs: true,
+      }).on('change', (change) => {
+        // формируем новый
+        pouch.load_changes({docs: [change.doc]});
+      }).on('error', (err) => {
+        // handle errors
+      });
+      debug(`loadind to ram: READY`);
+    },
+  });
 
 })();
 
