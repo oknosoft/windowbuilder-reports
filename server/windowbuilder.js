@@ -42,7 +42,7 @@ class Editor extends paper.PaperScope {
     const _canvas = paper.createCanvas(480, 480, format); // собственно, канвас
     _canvas.style.backgroundColor = "#f9fbfa";
     this.setup(_canvas);
-    new Scheme(_canvas, this);
+    new Scheme(_canvas, this, true);
   }
 };
 $p.Editor = Editor;
@@ -7828,7 +7828,7 @@ Editor.ProfileConnective = ProfileConnective;
 /**
  * ### Раскладка
  * &copy; Evgeniy Malyarov http://www.oknosoft.ru 2014-2017
- * 
+ *
  * Created 16.05.2016
  *
  * @module geometry
@@ -8111,7 +8111,7 @@ class Onlay extends ProfileItem {
 
 class Scheme extends paper.Project {
 
-  constructor(_canvas, _editor) {
+  constructor(_canvas, _editor, _silent) {
 
     // создаём объект проекта paperjs
     super(_canvas);
@@ -8119,6 +8119,7 @@ class Scheme extends paper.Project {
     const _scheme = _editor.project = this;
 
     const _attr = this._attr = {
+      _silent,
       _bounds: null,
       _calc_order_row: null,
       _update_timer: 0
@@ -8175,7 +8176,7 @@ class Scheme extends paper.Project {
       }
 
       for (const name of row_changed_names) {
-        if(fields.hasOwnProperty(name)) {
+        if(_attr._calc_order_row && fields.hasOwnProperty(name)) {
           _attr._calc_order_row[name] = obj[name];
           _scheme.register_change(true);
         }
@@ -8278,8 +8279,9 @@ class Scheme extends paper.Project {
     };
 
     // начинаем следить за _dp, чтобы обработать изменения цвета и параметров
-    this._dp._manager.on('update', this._dp_listener);
-
+    if(!_attr._silent){
+      this._dp._manager.on('update', this._dp_listener);
+    }
   }
 
   /**
@@ -8296,8 +8298,8 @@ class Scheme extends paper.Project {
     let setted;
 
     // пытаемся отключить обсервер от табчасти
-    _dp.characteristic._manager.off('update', _papam_listener);
-    _dp.characteristic._manager.off('rows', _papam_listener);
+    !_attr._silent && _dp.characteristic._manager.off('update', _papam_listener);
+    !_attr._silent && _dp.characteristic._manager.off('rows', _papam_listener);
 
     // устанавливаем в _dp характеристику
     _dp.characteristic = v;
@@ -8354,14 +8356,16 @@ class Scheme extends paper.Project {
     }
 
     // оповещаем о новых слоях и свойствах изделия
-    this._scope.eve.emit_async('rows', ox, {constructions: true});
-    _dp._manager.emit_async('rows', _dp, {extra_fields: true});
+    if(!_attr._silent){
+      this._scope.eve.emit_async('rows', ox, {constructions: true});
+      _dp._manager.emit_async('rows', _dp, {extra_fields: true});
 
-    // начинаем следить за ox, чтобы обработать изменения параметров фурнитуры
-    _dp.characteristic._manager.on({
-      update: _papam_listener,
-      rows: _papam_listener,
-    });
+      // начинаем следить за ox, чтобы обработать изменения параметров фурнитуры
+      _dp.characteristic._manager.on({
+        update: _papam_listener,
+        rows: _papam_listener,
+      });
+    }
 
   }
 
@@ -9867,7 +9871,7 @@ async function prod(ctx, next) {
   const {project, view} = new Editor();
   const {nom} = $p.cat;
   const calc_order = await $p.doc.calc_order.get(ctx.params.ref, 'promise');
-  const prod = await calc_order.load_production();
+  const prod = await calc_order.load_production(true);
   const res = {number_doc: calc_order.number_doc};
 
   for(let ox of prod){
@@ -9904,27 +9908,30 @@ async function prod(ctx, next) {
     if(_obj.coordinates && _obj.coordinates.length){
 
       await project.load(ox);
-      res[ref].imgs = {
-        'l0': view.element.toBuffer().toString('base64')
-      };
-      ox.constructions.forEach(({cnstr}) => {
-        project.draw_fragment({elm: -cnstr});
-        res[ref].imgs[`l${cnstr}`] = view.element.toBuffer().toString('base64');
-      });
+      await Promise.resolve().then(() => {
+        res[ref].imgs = {
+          'l0': view.element.toBuffer().toString('base64')
+        };
 
-      ox.glasses.forEach((row) => {
-        const glass = project.draw_fragment({elm: row.elm});
-        // подтянем формулу стеклопакета
-        res[ref].imgs[`g${row.elm}`] = view.element.toBuffer().toString('base64');
-        if(glass){
-          row.formula = glass.formula(true);
-          glass.visible = false;
-        }
+        ox.constructions.forEach(({cnstr}) => {
+          project.draw_fragment({elm: -cnstr});
+          res[ref].imgs[`l${cnstr}`] = view.element.toBuffer().toString('base64');
+        });
+
+        ox.glasses.forEach((row) => {
+          const glass = project.draw_fragment({elm: row.elm});
+          // подтянем формулу стеклопакета
+          res[ref].imgs[`g${row.elm}`] = view.element.toBuffer().toString('base64');
+          if(glass){
+            row.formula = glass.formula(true);
+            glass.visible = false;
+          }
+        });
       });
-      res[ref].glasses = _obj.glasses;
     }
-
   }
+
+  ctx.body = res;
 
   setTimeout(() => {
     try{
@@ -9938,8 +9945,6 @@ async function prod(ctx, next) {
     catch(err){}
   });
 
-  //ctx.body = `Prefix: ${ctx.route.prefix}, path: ${ctx.route.path}`;
-  ctx.body = res;
 }
 
 // формирует массив эскизов по параметрам запроса
@@ -10033,7 +10038,10 @@ module.exports = async (ctx, next) => {
   }
   catch(err){
     ctx.status = 500;
-    ctx.body = err.stack;
+    ctx.body = {
+      error: true,
+      message: err.stack || err.message,
+    };
     debug(err);
   }
 
