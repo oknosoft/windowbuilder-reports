@@ -20,7 +20,7 @@ gulp.task('windowbuilder-lib', function(){
     './src/geometry/*.js',
     './src/builder/export.js',
   ])
-    .pipe(concat('windowbuilder.js'))
+    .pipe(concat('windowbuilder.mjs'))
     .pipe(gulp.dest('./server'))
 
 });
@@ -30,11 +30,9 @@ gulp.task('modifiers', function(){
   return gulp.src([
     './src/modifiers/enums/*.js',
     './src/modifiers/catalogs/*.js',
-    './src/modifiers/charts_characteristics/*.js',
-    './src/modifiers/dataprocessors/*.js',
     './src/modifiers/documents/doc_calc_order.js',
   ])
-    .pipe(concat('modifiers.js'))
+    .pipe(concat('modifiers.mjs'))
     .pipe(wrap({ src: './server/metadata/modifiers.txt'}))
     .pipe(gulp.dest('./server/metadata'))
 

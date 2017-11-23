@@ -1,4 +1,4 @@
-module.exports = function($p) {
+export default function($p) {
 /**
  * Дополнительные методы перечисления Типы соединений
  *
@@ -322,7 +322,21 @@ module.exports = function($p) {
  */
 
 // при старте приложения, загружаем в ОЗУ обычные характеристики (без ссылок на заказы)
-$p.md.once('predefined_elmnts_inited', () => $p.cat.characteristics.pouch_load_view('doc/nom_characteristics'));
+$p.md.once('predefined_elmnts_inited', () => {
+  $p.cat.characteristics.pouch_load_view('doc/nom_characteristics')
+    // и корректируем метаданные формы спецификации с учетом ролей пользователя
+    .then(() => {
+    const {current_user} = $p;
+      if(current_user && (
+          current_user.role_available('СогласованиеРасчетовЗаказов') ||
+          current_user.role_available('ИзменениеТехнологическойНСИ') ||
+          current_user.role_available('РедактированиеЦен')
+        )) {
+        return;
+      };
+      $p.cat.characteristics.metadata().form.obj.tabular_sections.specification.widths = "50,*,70,*,50,70,70,80,70,70,70,0,0,0";
+    })
+});
 
 // свойства объекта характеристики
 $p.CatCharacteristics = class CatCharacteristics extends $p.CatCharacteristics {
@@ -556,14 +570,14 @@ $p.CatCharacteristics = class CatCharacteristics extends $p.CatCharacteristics {
 
       }
       else if(this.sys.production.count() > 1) {
-        this.sys.production.each(function (row) {
+        this.sys.production.each((row) => {
 
           if(setted) {
             return false;
           }
 
           if(row.param && !row.param.empty()) {
-            param.find_rows({cnstr: 0, param: row.param, value: row.value}, function () {
+            param.find_rows({cnstr: 0, param: row.param, value: row.value}, () => {
               setted = true;
               param._owner.owner = row.nom;
               return false;
@@ -572,7 +586,7 @@ $p.CatCharacteristics = class CatCharacteristics extends $p.CatCharacteristics {
 
         });
         if(!setted) {
-          this.sys.production.find_rows({param: $p.utils.blank.guid}, function (row) {
+          this.sys.production.find_rows({param: $p.utils.blank.guid}, (row) => {
             setted = true;
             param._owner.owner = row.nom;
             return false;
@@ -593,8 +607,12 @@ $p.CatCharacteristicsInsertsRow.prototype.value_change = function (field, type, 
   // для вложенных вставок перезаполняем параметры
   if(field == 'inset') {
     if(value != this.inset){
-      this._obj.inset = value;
       const {_owner} = this._owner;
+      // удаляем параметры старой вставки
+      !this.inset.empty() && _owner.params.clear({inset: this.inset, cnstr: this.cnstr});
+      // устанавливаем значение новой вставки
+      this._obj.inset = value;
+      // заполняем параметры по умолчанию
       _owner.add_inset_params(this.inset, this.cnstr);
     }
   }
@@ -616,16 +634,18 @@ $p.cat.characteristics.form_obj = function (pwnd, attr) {
         tabular_init('specification', $p.injected_data['toolbar_characteristics_specification.xml']);
         wnd.elmnts.tabs.tab_specification.getAttachedToolbar().attachEvent('onclick', (btn_id) => {
 
-          const selId = wnd.elmnts.grids.specification.getSelectedRowId();
-          if(selId && !isNaN(Number(selId))) {
-            return o.open_origin(Number(selId) - 1);
-          }
+          if(btn_id == 'btn_origin') {
+            const selId = wnd.elmnts.grids.specification.getSelectedRowId();
+            if(selId && !isNaN(Number(selId))) {
+              return o.open_origin(Number(selId) - 1);
+            }
 
-          $p.msg.show_msg({
-            type: 'alert-warning',
-            text: $p.msg.no_selected_row.replace('%1', 'Спецификация'),
-            title: o.presentation
-          });
+            $p.msg.show_msg({
+              type: 'alert-warning',
+              text: $p.msg.no_selected_row.replace('%1', 'Спецификация'),
+              title: o.presentation
+            });
+          }
 
         });
       }
@@ -904,36 +924,53 @@ $p.cat.clrs.__define({
 	 * @param clr_sch {CatClrs} - цвет изделия
 	 * @return {*}
 	 */
-	by_predefined: {
-		value: function(clr, clr_elm, clr_sch){
-		  const {predefined_name} = clr;
-			if(predefined_name){
-			  switch (predefined_name){
-          case 'КакЭлемент':
-            return clr_elm;
-          case 'КакИзделие':
-            return clr_sch;
-          case 'КакЭлементСнаружи':
-            return clr_elm.clr_out.empty() ? clr_elm : clr_elm.clr_out;
-          case 'КакЭлементИзнутри':
-            return clr_elm.clr_in.empty() ? clr_elm : clr_elm.clr_in;
-          case 'КакИзделиеСнаружи':
-            return clr_sch.clr_out.empty() ? clr_sch : clr_sch.clr_out;
-          case 'КакИзделиеИзнутри':
-            return clr_sch.clr_in.empty() ? clr_sch : clr_sch.clr_in;
-          case 'КакЭлементИнверсный':
-            return this.inverted(clr_elm);
-          case 'КакИзделиеИнверсный':
-            return this.inverted(clr_sch);
-          case 'БезЦвета':
-            return this.get();
-          default :
-            return clr_elm;
+  by_predefined: {
+    value: function (clr, clr_elm, clr_sch, elm, spec) {
+
+      const {predefined_name} = clr;
+      if(predefined_name) {
+        switch (predefined_name) {
+        case 'КакЭлемент':
+          return clr_elm;
+        case 'КакИзделие':
+          return clr_sch;
+        case 'КакЭлементСнаружи':
+          return clr_elm.clr_out.empty() ? clr_elm : clr_elm.clr_out;
+        case 'КакЭлементИзнутри':
+          return clr_elm.clr_in.empty() ? clr_elm : clr_elm.clr_in;
+        case 'КакИзделиеСнаружи':
+          return clr_sch.clr_out.empty() ? clr_sch : clr_sch.clr_out;
+        case 'КакИзделиеИзнутри':
+          return clr_sch.clr_in.empty() ? clr_sch : clr_sch.clr_in;
+        case 'КакЭлементИнверсный':
+          return this.inverted(clr_elm);
+        case 'КакИзделиеИнверсный':
+          return this.inverted(clr_sch);
+        case 'БезЦвета':
+          return this.get();
+        case 'КакВедущий':
+        case 'КакВедущийИзнутри':
+        case 'КакВедущийСнаружи':
+        case 'КакВедущийИнверсный':
+          const sub_clr = this.predefined(predefined_name.replace('КакВедущий', 'КакЭлемент'));
+          const t_parent = elm && elm.t_parent();
+          if(!elm || elm === t_parent){
+            return this.by_predefined(sub_clr,  clr_elm);
+          }
+          let finded = false;
+          spec && spec.find_rows({elm: t_parent.elm, nom: t_parent.nom}, (row) => {
+            finded = this.by_predefined(sub_clr,  row.clr);
+            return false;
+          });
+          return finded || clr_elm;
+
+        default :
+          return clr_elm;
         }
-			}
-      return clr.empty() ? clr_elm : clr
-		}
-	},
+      }
+      return clr.empty() ? clr_elm : clr;
+    }
+  },
 
   /**
    * ### Инверсный цвет
@@ -1047,20 +1084,14 @@ $p.cat.clrs.__define({
               name: eclr.clr_in.name + " \\ " + eclr.clr_out.name,
               parent: $p.job_prm.builder.composite_clr_folder
             })
-              .then(function (obj) {
-                // регистрируем цвет в couchdb
-                return obj.register_on_server()
-              })
-              .then(function (obj) {
-                pwnd.on_select.call(pwnd, obj);
-              })
-              .catch(function (err) {
-                $p.msg.show_msg({
-                  type: "alert-warning",
-                  text: "Недостаточно прав для добавления составного цвета",
-                  title: "Составной цвет"
-                });
-              })
+            // регистрируем цвет в couchdb
+              .then((obj) => obj.register_on_server())
+              .then((obj) => pwnd.on_select.call(pwnd, obj))
+              .catch((err) => $p.msg.show_msg({
+                type: "alert-warning",
+                text: "Недостаточно прав для добавления составного цвета",
+                title: "Составной цвет"
+              }));
           }
 
           wnd.close();
@@ -1541,7 +1572,7 @@ Object.defineProperties($p.cat.divisions, {
       $p.current_user.acl_objs.find_rows({type: "cat.divisions"}, (row) => {
         if(list.indexOf(row.acl_obj) == -1){
           list.push(row.acl_obj);
-          row.acl_obj._children.forEach((o) => {
+          row.acl_obj._children().forEach((o) => {
             if(list.indexOf(o) == -1){
               list.push(o);
             }
@@ -1590,7 +1621,7 @@ $p.CatElm_visualization.prototype.__define({
 	draw: {
 		value: function (elm, layer, offset) {
 
-		  const {CompoundPath} = elm.project._scope;
+		  const {CompoundPath, constructor} = elm.project._scope;
 
 			let subpath;
 
@@ -1624,40 +1655,46 @@ $p.CatElm_visualization.prototype.__define({
 					opacity: elm.opacity
 				});
 
-				// угол касательной
-				var angle_hor;
-				if(elm.is_linear() || offset < 0)
-					angle_hor = elm.generatrix.getTangentAt(0).angle;
-				else if(offset > elm.generatrix.length)
-					angle_hor = elm.generatrix.getTangentAt(elm.generatrix.length).angle;
-				else
-					angle_hor = elm.generatrix.getTangentAt(offset).angle;
+				if(elm instanceof constructor.Filling) {
+          subpath.position = elm.bounds.topLeft.add([20,10]);
+        }
+        else {
 
-				if((this.rotate != -1 || elm.orientation == $p.enm.orientations.Горизонтальная) && angle_hor != this.angle_hor){
-					subpath.rotation = angle_hor - this.angle_hor;
-				}
+          // угол касательной
+          var angle_hor;
+          if(elm.is_linear() || offset < 0)
+            angle_hor = elm.generatrix.getTangentAt(0).angle;
+          else if(offset > elm.generatrix.length)
+            angle_hor = elm.generatrix.getTangentAt(elm.generatrix.length).angle;
+          else
+            angle_hor = elm.generatrix.getTangentAt(offset).angle;
 
-				offset += elm.generatrix.getOffsetOf(elm.generatrix.getNearestPoint(elm.corns(1)));
+          if((this.rotate != -1 || elm.orientation == $p.enm.orientations.Горизонтальная) && angle_hor != this.angle_hor){
+            subpath.rotation = angle_hor - this.angle_hor;
+          }
 
-				const p0 = elm.generatrix.getPointAt(offset > elm.generatrix.length ? elm.generatrix.length : offset || 0);
+          offset += elm.generatrix.getOffsetOf(elm.generatrix.getNearestPoint(elm.corns(1)));
 
-				if(this.elm_side == -1){
-					// в середине элемента
-          const p1 = elm.rays.inner.getNearestPoint(p0);
-          const p2 = elm.rays.outer.getNearestPoint(p0);
+          const p0 = elm.generatrix.getPointAt(offset > elm.generatrix.length ? elm.generatrix.length : offset || 0);
 
-					subpath.position = p1.add(p2).divide(2);
+          if(this.elm_side == -1){
+            // в середине элемента
+            const p1 = elm.rays.inner.getNearestPoint(p0);
+            const p2 = elm.rays.outer.getNearestPoint(p0);
 
-				}else if(!this.elm_side){
-					// изнутри
-					subpath.position = elm.rays.inner.getNearestPoint(p0);
+            subpath.position = p1.add(p2).divide(2);
 
-				}else{
-					// снаружи
-					subpath.position = elm.rays.outer.getNearestPoint(p0);
-				}
+          }else if(!this.elm_side){
+            // изнутри
+            subpath.position = elm.rays.inner.getNearestPoint(p0);
+
+          }else{
+            // снаружи
+            subpath.position = elm.rays.outer.getNearestPoint(p0);
+          }
+        }
+
 			}
-
 		}
 	}
 
@@ -1679,20 +1716,23 @@ $p.adapters.pouch.once('pouch_data_loaded', () => {
   const {formulas} = $p.cat;
   formulas.pouch_find_rows({ _top: 500, _skip: 0 })
     .then((rows) => {
-      rows.forEach((formula) => {
+    const parents = [formulas.predefined("printing_plates"), formulas.predefined("modifiers")];
+    const filtered = rows.filter(v => !v.disabled && parents.indexOf(v.parent) !== -1);
+    filtered.sort((a, b) => a.sorting_field - b.sorting_field).forEach((formula) => {
         // формируем списки печатных форм и внешних обработок
-        if(formula.parent == formulas.predefined("printing_plates")){
+        if(formula.parent == parents[0]){
           formula.params.find_rows({param: "destination"}, (dest) => {
             const dmgr = $p.md.mgr_by_class_name(dest.value);
             if(dmgr){
               if(!dmgr._printing_plates){
                 dmgr._printing_plates = {};
               }
-              dmgr._printing_plates["prn_" + formula.ref] = formula;
+              dmgr._printing_plates[`prn_${formula.ref}`] = formula;
             }
           })
         }
-        else if(formula.parent == formulas.predefined("modifiers")){
+        else {
+          // выполняем модификаторы
           formula.execute();
         }
       });
@@ -1707,12 +1747,18 @@ $p.CatFormulas.prototype.__define({
 
 			// создаём функцию из текста формулы
 			if(!this._data._formula && this.formula){
-			  if(this.async){
-          const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
-          this._data._formula = (new AsyncFunction("obj,$p", this.formula)).bind(this);
+			  try{
+          if(this.async){
+            const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+            this._data._formula = (new AsyncFunction("obj,$p", this.formula)).bind(this);
+          }
+          else{
+            this._data._formula = (new Function("obj,$p", this.formula)).bind(this);
+          }
         }
-        else{
-          this._data._formula = (new Function("obj,$p", this.formula)).bind(this);
+        catch(err){
+          this._data._formula = () => false;
+          $p.record_log(err);
         }
       }
 
@@ -1905,9 +1951,9 @@ $p.CatFurns = class CatFurns extends $p.CatFurns {
 
     afurn_set.push(this.ref);
 
-    this.selection_params.each((row) => aprm.indexOf(row.param)==-1 && !row.param.is_calculated && aprm.push(row.param));
+    this.selection_params.each((row) => {aprm.indexOf(row.param)==-1 && !row.param.is_calculated && aprm.push(row.param)});
 
-    this.specification.each((row) => row.nom instanceof $p.CatFurns && row.nom.add_furn_prm(aprm, afurn_set));
+    this.specification.each((row) => {row.nom instanceof $p.CatFurns && row.nom.add_furn_prm(aprm, afurn_set)});
 
     return aprm;
 
@@ -1924,7 +1970,6 @@ $p.CatFurns = class CatFurns extends $p.CatFurns {
     const res = $p.dp.buyers_order.create().specification;
     const {ox} = contour.project;
     const {НаПримыкающий} = $p.enm.transfer_operations_options;
-    const {СварнойШов} = $p.enm.angle_calculating_ways;
 
     // бежим по всем строкам набора
     this.specification.find_rows({dop: 0}, (row_furn) => {
@@ -1945,20 +1990,26 @@ $p.CatFurns = class CatFurns extends $p.CatFurns {
           // расчет координаты и (или) визуализации
           if(dop_row.is_procedure_row){
 
-            const invert = contour.direction == $p.enm.open_directions.Правое,
-              elm = contour.profile_by_furn_side(dop_row.side, cache),
-              len = elm._row.len,
-              sizefurn = elm.nom.sizefurn,
-              main_row = elm.rays.b.cnn && elm.rays.b.cnn.main_row(elm),
-              dx0 = main_row && main_row.angle_calc_method == СварнойШов ? -main_row.sz : 0,
-              dx1 = $p.job_prm.builder.add_d ? sizefurn : 0,
-              faltz = len - 2 * sizefurn;
+            // для правого открывания, инвертируем координату
+            const invert = contour.direction == $p.enm.open_directions.Правое;
+            // получаем элемент через сторону фурнитуры
+            const elm = contour.profile_by_furn_side(dop_row.side, cache);
+            // profile._len - то, что получится после обработки
+            // row_spec.len - сколько взять (отрезать)
+            // len - геометрическая длина без учета припусков на обработку
+            const {len} = elm._row;
+            // свойство номенклатуры размер до фурнпаза
+            const {sizefurn} = elm.nom;
+            // в зависимости от значения константы add_d, вычисляем dx1
+            const dx1 = $p.job_prm.builder.add_d ? sizefurn : 0;
+            // длина с поправкой на фурнпаз
+            const faltz = len - 2 * sizefurn;
 
             let invert_nearest = false, coordin = 0;
 
             if(dop_row.offset_option == $p.enm.offset_options.Формула){
               if(!dop_row.formula.empty()){
-                coordin = dop_row.formula.execute({ox, elm, contour, len, sizefurn, dx0, dx1, faltz, invert, dop_row});
+                coordin = dop_row.formula.execute({ox, elm, contour, len, sizefurn, dx1, faltz, invert, dop_row});
               }
             }
             else if(dop_row.offset_option == $p.enm.offset_options.РазмерПоФальцу){
@@ -2005,15 +2056,20 @@ $p.CatFurns = class CatFurns extends $p.CatFurns {
               const point = outer.getPointAt(outer.getOffsetOf(outer.getNearestPoint(elm.corns(1))) + coordin);
               procedure_row.handle_height_min = nearest.elm;
               procedure_row.coefficient = nouter.getOffsetOf(nouter.getNearestPoint(point)) - nouter.getOffsetOf(nouter.getNearestPoint(nearest.corns(1)));
+              // если сказано учесть припуск - добавляем dx0
+              if(dop_row.overmeasure){
+                procedure_row.coefficient +=  nearest.dx0;
+              }
             }
             else{
               procedure_row.handle_height_min = elm.elm;
               procedure_row.coefficient = coordin;
+              // если сказано учесть припуск - добавляем dx0
+              if(dop_row.overmeasure){
+                procedure_row.coefficient +=  elm.dx0;
+              }
             }
-            // если сказано учесть припуск - добавляем dx0
-            if(dop_row.overmeasure){
-              procedure_row.coefficient += dx0;
-            }
+
             return;
           }
           else if(!dop_row.quantity){
@@ -2053,7 +2109,7 @@ $p.CatFurns = class CatFurns extends $p.CatFurns {
         if(row_furn.quantity){
           const row_spec = res.add(row_furn);
           row_spec.origin = this;
-          if(!row_furn.formula.empty()){
+          if(!row_furn.formula.empty() && !row_furn.formula.condition_formula){
             row_furn.formula.execute({ox, contour, row_furn, row_spec});
           }
         }
@@ -2076,10 +2132,16 @@ $p.CatFurnsSpecificationRow = class CatFurnsSpecificationRow extends $p.CatFurns
    * @param cache {Object}
    */
   check_restrictions(contour, cache) {
-    const {elm, dop, handle_height_min, handle_height_max} = this;
+    const {elm, dop, handle_height_min, handle_height_max, formula} = this;
     const {direction, h_ruch, cnstr} = contour;
 
+    // проверка по высоте ручки
     if(h_ruch < handle_height_min || (handle_height_max && h_ruch > handle_height_max)){
+      return false;
+    }
+
+    // проверка по формуле
+    if(!cache.ignore_formulas && !formula.empty() && formula.condition_formula && !formula.execute({ox: cache.ox, contour, row_furn: this})) {
       return false;
     }
 
@@ -2518,7 +2580,7 @@ $p.CatInserts = class CatInserts extends $p.CatInserts {
         // если строка спецификации не добавлена на предыдущем шаге, делаем это сейчас
         row_spec = new_spec_row({row_spec, elm, row_base: row_ins_spec, origin, spec, ox});
       }
-      // для вставок в профиль способ расчета количество не учитывается
+      // для вставок в профиль способ расчета количества не учитывается
       else if(profile_items.indexOf(_row.elm_type) != -1 || row_ins_spec.count_calc_method == ДляЭлемента){
         calc_qty_len(row_spec, row_ins_spec, len_angl ? len_angl.len : _row.len);
       }
@@ -2548,6 +2610,18 @@ $p.CatInserts = class CatInserts extends $p.CatInserts {
             row_prm.is_linear = () => rib.profile ? rib.profile.is_linear() : true;
             if(this.check_restrictions(row_ins_spec, row_prm, true)){
               row_spec = new_spec_row({elm, row_base: row_ins_spec, origin, spec, ox});
+              // при расчете по периметру, выполняем формулу для каждого ребра периметра
+              if(!row_ins_spec.formula.empty()){
+                const qty = row_ins_spec.formula.execute({
+                  ox: ox,
+                  elm: rib.profile || rib,
+                  cnstr: len_angl && len_angl.cnstr || 0,
+                  inset: (len_angl && len_angl.hasOwnProperty('cnstr')) ? len_angl.origin : $p.utils.blank.guid,
+                  row_ins: row_ins_spec,
+                  row_spec: row_spec,
+                  len: rib.len
+                });
+              }
               calc_qty_len(row_spec, row_ins_spec, rib.len);
               calc_count_area_mass(row_spec, spec, _row, row_ins_spec.angle_calc_method);
             }
@@ -2620,6 +2694,9 @@ $p.CatInserts = class CatInserts extends $p.CatInserts {
           });
           if(row_ins_spec.count_calc_method == ПоФормуле){
             row_spec.qty = qty;
+          }
+          else if(row_ins_spec.formula.condition_formula && !qty){
+            row_spec.qty = 0;
           }
         }
         calc_count_area_mass(row_spec, spec, _row, row_ins_spec.angle_calc_method);
@@ -3104,11 +3181,9 @@ $p.CatProduction_params.prototype.__define({
 			else if(!Array.isArray(elm_types))
 				elm_types = [elm_types];
 
-			this.elmnts.each(function(row){
+			this.elmnts.each((row) => {
 				if(!row.nom.empty() && elm_types.indexOf(row.elm_type) != -1 &&
-					(by_default == "rows" || !__noms.some(function (e) {
-						return row.nom == e.nom;
-					})))
+					(by_default == "rows" || !__noms.some((e) => row.nom == e.nom)))
 					__noms.push(row);
 			});
 
@@ -3135,9 +3210,7 @@ $p.CatProduction_params.prototype.__define({
 						return 0;
 				}
 			});
-			return __noms.map(function (e) {
-				return e.nom;
-			});
+			return __noms.map((e) => e.nom);
 		}
 	},
 
@@ -3148,974 +3221,66 @@ $p.CatProduction_params.prototype.__define({
 	 * @param cnstr {Nomber} - номер конструкции. Если 0 - перезаполняем параметры изделия, иначе - фурнитуры
 	 */
 	refill_prm: {
-		value: function (ox, cnstr) {
+		value: function (ox, cnstr = 0) {
 
-			var prm_ts = !cnstr ? this.product_params : this.furn_params,
-				adel = [];
+			const prm_ts = !cnstr ? this.product_params : this.furn_params;
+			const adel = [];
+			const auto_align = ox.calc_order.obj_delivery_state == $p.enm.obj_delivery_states.Шаблон && $p.job_prm.properties.auto_align;
+			const {params} = ox;
+
+			function add_prm(default_row) {
+        let row;
+        params.find_rows({cnstr: cnstr, param: default_row.param}, (_row) => {
+          row = _row;
+          return false;
+        });
+
+        // если не найден параметр изделия - добавляем. если нет параметра фурнитуры - пропускаем
+        if(!row){
+          if(cnstr){
+            return;
+          }
+          row = params.add({cnstr: cnstr, param: default_row.param, value: default_row.value});
+        }
+
+        if(row.hide != default_row.hide){
+          row.hide = default_row.hide;
+        }
+
+        if(default_row.forcibly && row.value != default_row.value){
+          row.value = default_row.value;
+        }
+      }
 
 			// если в характеристике есть лишние параметры - удаляем
 			if(!cnstr){
-				cnstr = 0;
-				ox.params.find_rows({cnstr: cnstr}, function (row) {
-					if(prm_ts.find_rows({param: row.param}).length == 0)
-						adel.push(row);
+        params.find_rows({cnstr: cnstr}, (row) => {
+				  const {param} = row;
+					if(param !== auto_align && prm_ts.find_rows({param}).length == 0){
+            adel.push(row);
+          }
 				});
-				adel.forEach(function (row) {
-					ox.params.del(row);
-				});
+				adel.forEach((row) => params.del(row));
 			}
 
 			// бежим по параметрам. при необходимости, добавляем или перезаполняем и устанавливаем признак hide
-			prm_ts.forEach(function (default_row) {
+			prm_ts.forEach(add_prm);
 
-				var row;
-				ox.params.find_rows({cnstr: cnstr, param: default_row.param}, function (_row) {
-					row = _row;
-					return false;
-				});
+			// для шаблонов, добавляем параметр автоуравнивание
+      !cnstr && auto_align && add_prm({param: auto_align, value: '', hide: false});
 
-				// если не найден параметр изделия - добавляем. если нет параметра фурнитуры - пропускаем
-				if(!row){
-					if(cnstr)
-						return;
-					row = ox.params.add({cnstr: cnstr, param: default_row.param, value: default_row.value});
-				}
-
-				if(row.hide != default_row.hide)
-					row.hide = default_row.hide;
-
-				if(default_row.forcibly && row.value != default_row.value)
-					row.value = default_row.value;
-			});
-
+      // устанавливаем систему и номенклатуру продукции
 			if(!cnstr){
 				ox.sys = this;
 				ox.owner = ox.prod_nom;
 
 				// одновременно, перезаполним параметры фурнитуры
-				ox.constructions.forEach((row) => {
-					if(!row.furn.empty())
-						ox.sys.refill_prm(ox, row.cnstr);
-				})
+				ox.constructions.forEach((row) => !row.furn.empty() && ox.sys.refill_prm(ox, row.cnstr))
 			}
 		}
 	}
 
 });
-
-
-/**
- * ### Дополнительные методы справочника _Права внешних пользователей_
- *
- * &copy; Evgeniy Malyarov http://www.oknosoft.ru 2014-2017
- *
- * @module cat_users_acl
- */
-
-
-$p.cat.users.__define({
-
-  // при загрузке пользователей, морозим объект, чтобы его невозможно было изменить из интерфейса
-	load_array: {
-		value: function(aattr, forse){
-			const res = [];
-			for(let aobj of aattr){
-			  if(!aobj.acl_objs){
-          aobj.acl_objs = [];
-        }
-        const {acl} = aobj;
-			  delete aobj.acl;
-        const obj = new $p.CatUsers(aobj, this, true);
-        const {_obj} = obj;
-        if(_obj){
-          _obj._acl = acl;
-          obj._set_loaded();
-          Object.freeze(obj);
-          Object.freeze(_obj);
-          for(let j in _obj){
-            if(typeof _obj[j] == "object"){
-              Object.freeze(_obj[j]);
-              for(let k in _obj[j]){
-                typeof _obj[j][k] == "object" && Object.freeze(_obj[j][k]);
-              }
-            }
-          }
-          res.push(obj);
-        }
-			}
-			return res;
-		},
-    configurable: false
-	}
-
-});
-
-
-/**
- * ### Дополнительные методы ПВХ Предопределенные элементы
- * Предопределенные элементы - аналог констант для хранения ссылочных и списочных настроек приложения
- *
- * &copy; Evgeniy Malyarov http://www.oknosoft.ru 2014-2017
- *
- * @module cch_predefined_elmnts
- */
-
-(function($p){
-
-  const {job_prm, adapters, cch, doc} = $p;
-
-	// Подписываемся на событие окончания загрузки локальных данных
-  adapters.pouch.once('pouch_doc_ram_loaded', () => {
-
-    // читаем элементы из pouchdb и создаём свойства
-    cch.predefined_elmnts.pouch_find_rows({_raw: true, _top: 500, _skip: 0})
-      .then((rows) => {
-
-        const parents = {};
-
-        rows.forEach((row) => {
-          if(row.is_folder && row.synonym){
-            var ref = row._id.split("|")[1];
-            parents[ref] = row.synonym;
-            !job_prm[row.synonym] && job_prm.__define(row.synonym, { value: {} });
-          }
-
-        });
-
-        rows.forEach((row) => {
-
-          if(!row.is_folder && row.synonym && parents[row.parent] && !job_prm[parents[row.parent]][row.synonym]){
-
-            let _mgr;
-
-            if(row.type.is_ref){
-              const tnames = row.type.types[0].split(".");
-              _mgr = $p[tnames[0]][tnames[1]]
-            }
-
-            if(row.list == -1){
-
-              job_prm[parents[row.parent]].__define(row.synonym, {
-                value: (() => {
-                  const res = {};
-                  row.elmnts.forEach((row) => {
-                    res[row.elm] = _mgr ? _mgr.get(row.value, false, false) : row.value;
-                  });
-                  return res;
-                })()
-              });
-
-            }
-            else if(row.list){
-
-              job_prm[parents[row.parent]].__define(row.synonym, {
-                value: row.elmnts.map((row) => {
-                  if(_mgr){
-                    const value = _mgr.get(row.value, false, false);
-                    if(!$p.utils.is_empty_guid(row.elm)){
-                      value._formula = row.elm;
-                    }
-                    return value;
-                  }else{
-                    return row.value;
-                  }
-                })
-              });
-
-              if(row.synonym == "calculated"){
-
-              }
-            }
-            else{
-
-              if(job_prm[parents[row.parent]].hasOwnProperty(row.synonym)){
-                delete job_prm[parents[row.parent]][row.synonym];
-              }
-
-              job_prm[parents[row.parent]].__define(row.synonym, {
-                value: _mgr ? _mgr.get(row.value, false, false) : row.value,
-                configurable: true
-              });
-            }
-
-          }
-        });
-      })
-      .then(() => {
-
-        // рассчеты, помеченные, как шаблоны, загрузим в память заранее
-        setTimeout(doc.calc_order.load_templates.bind(doc.calc_order), 1000);
-
-        // даём возможность завершиться другим обработчикам, подписанным на _pouch_load_data_loaded_
-        setTimeout(() => $p.md.emit("predefined_elmnts_inited"), 100);
-
-      });
-
-  });
-
-	const _mgr = cch.predefined_elmnts;
-
-
-	/**
-	 * Переопределяем геттер значения
-	 *
-	 * @property value
-	 * @override
-	 * @type {*}
-	 */
-	delete $p.CchPredefined_elmnts.prototype.value;
-	$p.CchPredefined_elmnts.prototype.__define({
-
-		value: {
-			get: function () {
-
-				const mf = this.type;
-				const res = this._obj ? this._obj.value : "";
-				let mgr, ref;
-
-				if(this._obj.is_folder){
-          return "";
-        }
-				if(typeof res == "object"){
-          return res;
-        }
-				else if(mf.is_ref){
-					if(mf.digits && typeof res === "number"){
-            return res;
-          }
-					if(mf.hasOwnProperty("str_len") && !$p.utils.is_guid(res)){
-            return res;
-          }
-					if(mgr = $p.md.value_mgr(this._obj, "value", mf)){
-						if($p.utils.is_data_mgr(mgr)){
-              return mgr.get(res, false);
-            }
-						else{
-              return $p.utils.fetch_type(res, mgr);
-            }
-					}
-					if(res){
-						console.log(["value", mf, this._obj]);
-						return null;
-					}
-				}
-				else if(mf.date_part){
-          return $p.utils.fix_date(this._obj.value, true);
-        }
-        else if(mf.digits){
-          return $p.utils.fix_number(this._obj.value, !mf.hasOwnProperty("str_len"));
-        }
-        else if(mf.types[0]=="boolean"){
-          return $p.utils.fix_boolean(this._obj.value);
-        }
-				else{
-          return this._obj.value || "";
-        }
-
-				return this.characteristic.clr;
-			},
-
-			set: function (v) {
-
-				if(this._obj.value === v){
-          return;
-        }
-
-        _mgr.emit_async('update', this, {value: this._obj.value})
-				this._obj.value = v.valueOf();
-				this._data._modified = true;
-			}
-		}
-	});
-
-	/**
-	 * ### Форма элемента
-	 *
-	 * @method form_obj
-	 * @override
-	 * @param pwnd
-	 * @param attr
-	 * @returns {*}
-	 */
-	_mgr.form_obj = function(pwnd, attr){
-
-		let o, wnd;
-
-		return this.constructor.prototype.form_obj.call(this, pwnd, attr)
-			.then((res) => {
-				if(res){
-					o = res.o;
-					wnd = res.wnd;
-					return res;
-				}
-			});
-	}
-
-})($p);
-
-/**
- * ### Дополнительные методы плана видов характеристик _Свойства объектов_
- * аналог подсистемы _Свойства_ БСП
- *
- * &copy; Evgeniy Malyarov http://www.oknosoft.ru 2014-2017
- *
- * @module cch_properties
- */
-
-
-$p.cch.properties.__define({
-
-	/**
-	 * ### Проверяет заполненность обязательных полей
-	 *
-	 * @method check_mandatory
-	 * @override
-	 * @param prms {Array}
-	 * @param title {String}
-	 * @return {Boolean}
-	 */
-	check_mandatory: {
-		value: function(prms, title){
-
-			var t, row;
-
-			// проверяем заполненность полей
-			for(t in prms){
-				row = prms[t];
-				if(row.param.mandatory && (!row.value || row.value.empty())){
-					$p.msg.show_msg({
-						type: "alert-error",
-						text: $p.msg.bld_empty_param + row.param.presentation,
-						title: title || $p.msg.bld_title});
-					return true;
-				}
-			}
-		}
-	},
-
-	/**
-	 * ### Возвращает массив доступных для данного свойства значений
-	 *
-	 * @method slist
-	 * @override
-	 * @param prop {CatObj} - планвидовхарактеристик ссылка или объект
-	 * @param ret_mgr {Object} - установить в этом объекте указатель на менеджера объекта
-	 * @return {Array}
-	 */
-	slist: {
-		value: function(prop, ret_mgr){
-
-			var res = [], rt, at, pmgr, op = this.get(prop);
-
-			if(op && op.type.is_ref){
-				// параметры получаем из локального кеша
-				for(rt in op.type.types)
-					if(op.type.types[rt].indexOf(".") > -1){
-						at = op.type.types[rt].split(".");
-						pmgr = $p[at[0]][at[1]];
-						if(pmgr){
-
-							if(ret_mgr)
-								ret_mgr.mgr = pmgr;
-
-							if(pmgr.class_name=="enm.open_directions")
-								pmgr.get_option_list().forEach(function(v){
-									if(v.value && v.value!=$p.enm.tso.folding)
-										res.push(v);
-								});
-
-							else if(pmgr.class_name.indexOf("enm.")!=-1 || !pmgr.metadata().has_owners)
-								res = pmgr.get_option_list();
-
-							else
-								pmgr.find_rows({owner: prop}, function(v){
-									res.push({value: v.ref, text: v.presentation});
-								});
-						}
-					}
-			}
-			return res;
-		}
-	}
-
-});
-
-$p.CchProperties.prototype.__define({
-
-  /**
-   * ### Является ли значение параметра вычисляемым
-   *
-   * @property is_calculated
-   * @type Boolean
-   */
-  is_calculated: {
-    get: function () {
-      return ($p.job_prm.properties.calculated || []).indexOf(this) != -1;
-    }
-  },
-
-  /**
-   * ### Рассчитывает значение вычисляемого параметра
-   * @param obj {Object}
-   * @param [obj.row]
-   * @param [obj.elm]
-   * @param [obj.ox]
-   */
-  calculated_value: {
-    value: function (obj) {
-      if(!this._calculated_value){
-        if(this._formula){
-          this._calculated_value = $p.cat.formulas.get(this._formula);
-        }else{
-          return;
-        }
-      }
-      return this._calculated_value.execute(obj)
-    }
-  },
-
-  check_compare: {
-    value: function (left, right, comparison_type) {
-      const {eq, ne, gt, gte, lt, lte, nin, inh, ninh} = $p.enm.comparison_types;
-      switch(comparison_type) {
-        case ne:
-          return left != right;
-        case gt:
-          return left > right;
-        case gte:
-          return left >= right;
-        case lt:
-          return left < right;
-        case lte:
-          return left <= right;
-        case nin:
-          if(Array.isArray(left) && !Array.isArray(right)){
-            return left.indexOf(right) == -1;
-          }
-          else if(!Array.isArray(left) && Array.isArray(right)){
-            return right.indexOf(left) == -1;
-          }
-          else if(!Array.isArray(left) && !Array.isArray(right)){
-            return right != left;
-          }
-          break;
-        case $p.enm.comparison_types.in:
-          if(Array.isArray(left) && !Array.isArray(right)){
-            return left.indexOf(right) != -1;
-          }
-          else if(!Array.isArray(left) && Array.isArray(right)){
-            return right.indexOf(left) != -1;
-          }
-          else if(!Array.isArray(left) && !Array.isArray(right)){
-            return left == right;
-          }
-          break;
-        case inh:
-          return $p.utils.is_data_obj(left) ? left._hierarchy(right) : left == right;
-        case ninh:
-          return $p.utils.is_data_obj(left) ? !left._hierarchy(right) : left != right;
-        default:
-          return left == right;
-      }
-    }
-  },
-
-  /**
-   * ### Проверяет условие в строке отбора
-   */
-  check_condition: {
-    value: function ({row_spec, prm_row, elm, cnstr, origin, ox, calc_order}) {
-
-      const {is_calculated} = this;
-
-      // значение параметра
-      const val = is_calculated ? this.calculated_value({
-        row: row_spec,
-        cnstr: cnstr || 0,
-        elm,
-        ox,
-        calc_order
-      }) : this.extract_value(prm_row);
-
-      let ok = false;
-
-      // если сравнение на равенство - решаем в лоб, если вычисляемый параметр типа массив - выясняем вхождение значения в параметр
-      if(ox && !Array.isArray(val) && (prm_row.comparison_type.empty() || prm_row.comparison_type == $p.enm.comparison_types.eq)){
-        if(is_calculated){
-          ok = val == prm_row.value;
-        }
-        else{
-          ox.params.find_rows({
-            cnstr: cnstr || 0,
-            inset: (typeof origin !== 'number' && origin) || $p.utils.blank.guid,
-            param: this,
-            value: val
-          }, () => {
-            ok = true;
-            return false;
-          });
-        }
-      }
-      // вычисляемый параметр - его значение уже рассчитано формулой (val) - сравниваем со значением в строке ограничений
-      else if(is_calculated){
-        const value = this.extract_value(prm_row);
-        ok = this.check_compare(val, this.extract_value(prm_row), prm_row.comparison_type);
-      }
-      // параметр явно указан в табчасти параметров изделия
-      else{
-        ox.params.find_rows({
-          cnstr: cnstr || 0,
-          inset: (typeof origin !== 'number' && origin) || $p.utils.blank.guid,
-          param: this
-        }, ({value}) => {
-          // value - значение из строки параметра текущей продукции, val - знаяение из параметров отбора
-          ok = this.check_compare(value, val, prm_row.comparison_type);
-          return false;
-        });
-      }
-      return ok;
-    }
-  },
-
-  /**
-   * Извлекает значение параметра с учетом вычисляемости
-   */
-  extract_value: {
-    value: function ({comparison_type, txt_row, value}) {
-
-      switch(comparison_type) {
-
-        case $p.enm.comparison_types.in:
-        case $p.enm.comparison_types.nin:
-
-          if(!txt_row){
-            return value;
-          }
-          try{
-            const arr = JSON.parse(txt_row);
-            const {types} = this.type;
-            if(types.length == 1){
-              const mgr = $p.md.mgr_by_class_name(types[0]);
-              return arr.map((ref) => mgr.get(ref, false));
-            }
-            return arr;
-          }
-          catch(err){
-            return value;
-          }
-
-        default:
-          return value;
-      }
-    }
-  },
-
-  /**
-   * Возвращает массив связей текущего параметра
-   */
-  params_links: {
-    value: function (attr) {
-
-      // первым делом, выясняем, есть ли ограничитель на текущий параметр
-      if(!this.hasOwnProperty("_params_links")){
-        this._params_links = $p.cat.params_links.find_rows({slave: this})
-      }
-
-      return this._params_links.filter((link) => {
-        let ok = true;
-        // для всех записей ключа параметров
-        link.master.params.forEach((row) => {
-          // выполнение условия рассчитывает объект CchProperties
-          ok = row.property.check_condition({
-            cnstr: attr.grid.selection.cnstr,
-            ox: attr.obj._owner._owner,
-            prm_row: row,
-            elm: attr.obj,
-          });
-          if(!ok){
-            return false;
-          }
-        });
-        return ok;
-      });
-    }
-  },
-
-  /**
-   * Проверяет и при необходимости перезаполняет или устанваливает умолчание value в prow
-   */
-  linked_values: {
-    value: function (links, prow) {
-      const values = [];
-      let changed;
-      // собираем все доступные значения в одном массиве
-      links.forEach((link) => link.values.forEach((row) => values.push(row)));
-      // если значение доступно в списке - спокойно уходим
-      if(values.some((row) => row._obj.value == prow.value)){
-        return;
-      }
-      // если есть явный default - устанавливаем
-      if(values.some((row) => {
-          if(row.forcibly){
-            prow.value = row._obj.value;
-            return true;
-          }
-          if(row.by_default && (!prow.value || prow.value.empty && prow.value.empty())){
-            prow.value = row._obj.value;
-            changed = true;
-          }
-        })){
-        return true;
-      }
-      // если не нашли лучшего, установим первый попавшийся
-      if(changed){
-        return true;
-      }
-      if(values.length){
-        prow.value = values[0]._obj.value;
-        return true;
-      }
-    }
-  },
-
-  /**
-   * ### Дополняет отбор фильтром по параметрам выбора
-   * Используется в полях ввода экранных форм
-   * @param filter {Object} - дополняемый фильтр
-   * @param attr {Object} - атрибуты OCombo
-   */
-  filter_params_links: {
-    value: function (filter, attr) {
-      // для всех отфильтрованных связей параметров
-      this.params_links(attr).forEach((link) => {
-        // если ключ найден в параметрах, добавляем фильтр
-        if(!filter.ref){
-          filter.ref = {in: []}
-        }
-        if(filter.ref.in){
-          link.values._obj.forEach((row) => {
-            if(filter.ref.in.indexOf(row.value) == -1){
-              filter.ref.in.push(row.value);
-            }
-          });
-        }
-      });
-    }
-  }
-
-});
-
-/**
- * ### Модификаторы обработки _builder_pen_
- *
- * &copy; Evgeniy Malyarov http://www.oknosoft.ru 2014-2017
- *
- * Created 13.05.2016
- *
- * @module dp_builder_pen
- */
-
-$p.dp.builder_pen.on({
-
-	value_change: function(attr, obj){
-		if(attr.field == "elm_type") {
-      obj.inset = paper.project.default_inset({elm_type: obj.elm_type});
-      obj.rama_impost = paper.project._dp.sys.inserts([obj.elm_type]);
-		}
-	},
-
-});
-
-$p.dp.builder_lay_impost.on({
-
-	value_change: function(attr, obj){
-		if(attr.field == "elm_type") {
-      obj.inset_by_y = paper.project.default_inset({
-				elm_type: obj.elm_type,
-				pos: $p.enm.positions.ЦентрГоризонталь
-			});
-      obj.inset_by_x = paper.project.default_inset({
-				elm_type: obj.elm_type,
-				pos: $p.enm.positions.ЦентрВертикаль
-			});
-      obj.rama_impost = paper.project._dp.sys.inserts([obj.elm_type]);
-		}
-	}
-});
-
-/**
- * Контекстный отчет по ценам номенклатуры
- *
- * @module dp_builder_price
- *
- * Created by Evgeniy Malyarov on 12.02.2017.
- */
-
-// переопределяем форму обработки в качестве отчета по ценам номенклатуры
-$p.DpBuilder_price.prototype.__define({
-
-  form_obj: {
-    value: function (pwnd, attr) {
-
-      const {nom, goods, _manager} = this;
-      const _metadata = this._metadata();
-
-      // форма в модальном диалоге
-      const options = {
-        name: 'wnd_obj_' + _manager.class_name,
-        wnd: {
-          top: 80 + Math.random()*40,
-          left: 120 + Math.random()*80,
-          width: 780,
-          height: 400,
-          modal: true,
-          center: false,
-          pwnd: pwnd,
-          allow_close: true,
-          allow_minmax: true,
-          caption: `Цены: <b>${nom.name}</b>`
-        }
-      };
-
-      const wnd = $p.iface.dat_blank(null, options.wnd);
-
-      const ts_captions = {
-        "fields":["price_type","nom_characteristic","date","price","currency"],
-        "headers":"Тип Цен,Характеристика,Дата,Цена,Валюта",
-        "widths":"200,*,150,120,100",
-        "min_widths":"150,200,100,100,100",
-        "aligns":"",
-        "sortings":"na,na,na,na,na",
-        "types":"ro,ro,dhxCalendar,ro,ro"
-      };
-
-      return $p.wsql.pouch.local.doc.query('doc/doc_nom_prices_setup_slice_last', {
-        limit : 1000,
-        include_docs: false,
-        reduce: false,
-        startkey: [nom.ref, ''],
-        endkey: [nom.ref, '\ufff0']
-      })
-        .then((data) => {
-        if(data && data.rows){
-          data.rows.forEach((row) => {
-            goods.add({
-              nom_characteristic: row.key[1],
-              price_type: row.key[2],
-              date: row.value.date,
-              price: row.value.price,
-              currency: row.value.currency
-            })
-          });
-
-          goods.sort(["price_type","nom_characteristic","date"]);
-
-          wnd.elmnts.grids.goods = wnd.attachTabular({
-            obj: this,
-            ts: "goods",
-            pwnd: wnd,
-            ts_captions: ts_captions
-          });
-          wnd.detachToolbar();
-        }
-      })
-
-    }
-  }
-});
-
-/**
- * ### Модификаторы обработки _Заказ покупателя_
- *
- * &copy; Evgeniy Malyarov http://www.oknosoft.ru 2014-2017
- *
- * Created 13.05.2016
- *
- * @module dp_buyers_order
- */
-
-
-// переопределяем свойства цвет и система - они будут псевдонимами свойств текущей характеристики
-$p.DpBuyers_order = class DpBuyers_order extends $p.DpBuyers_order {
-
-  get clr() {
-    return this.characteristic.clr;
-  }
-  set clr(v) {
-    const {characteristic, _data} = this;
-    if((!v && characteristic.empty()) || characteristic.clr == v){
-      return;
-    }
-    this._manager.emit_async('update', this, {clr: characteristic.clr});
-    characteristic.clr = v;
-    _data._modified = true;
-  }
-
-  get sys() {
-    return this.characteristic.sys;
-  }
-  set sys(v) {
-    const {characteristic, _data} = this;
-    if((!v && characteristic.empty()) || characteristic.sys == v){
-      return;
-    }
-    this._manager.emit_async('update', this, {sys: characteristic.sys});
-    characteristic.sys = v;
-    _data._modified = true;
-  }
-
-  get extra_fields() {
-    return this.characteristic.params;
-  }
-}
-
-
-/**
- * ### Форма ДобавитьСписокПродукции
- * В этой форме пользователь задаёт размеры и параметры вставок, по которым будет сформирована продукция заказа
- *
- *
- * Created 13.05.2016
- *
- * @module dp_buyers_order
- */
-
-// установим количество по умолчению при добавлении строки
-$p.DpBuyers_order.prototype.add_row = function (row) {
-  if (row._owner.name === 'production') {
-    row.qty = row.quantity = 1;
-  }
-};
-
-$p.DpBuyers_orderProductionRow.prototype.value_change = function (field, type, value) {
-  if (field == 'len' || field == 'height') {
-    this[field] = value;
-  }
-  if (this.height != 0 && this.height != 0) {
-    this.s = (this.height * this.len / 1000000).round(3);
-  }
-};
-
-
-class CalcOrderFormProductList {
-
-  constructor(pwnd, calc_order) {
-
-    this.dp = $p.dp.buyers_order.create();
-    this.dp.calc_order = calc_order;
-
-    this.attr = {
-
-      // командная панель формы
-      toolbar_struct: $p.injected_data['toolbar_product_list.xml'],
-
-      // переопределяем обработчики кнопок командной панели формы
-      toolbar_click: this.toolbar_click.bind(this),
-
-      // переопределяем метод отрисовки шапки документа, т.к. мы хотим разместить табчасть на первой странице без закладок
-      draw_pg_header: this.draw_pg_header.bind(this),
-
-      // переопределяем метод отрисовки табличных частей, т.к. мы хотим разместить табчасть на первой странице без закладок
-      draw_tabular_sections: this.draw_tabular_sections.bind(this),
-
-    };
-
-    this.dp.presentation = calc_order.presentation + ' - добавление продукции';
-
-    this.dp.form_obj(pwnd, this.attr);
-
-
-  }
-
-  // навешиваем обработчики событий на элементы управления
-  draw_pg_header(dp, wnd) {
-    const {production} = wnd.elmnts.grids;
-    const refill_prms = this.refill_prms.bind(this);
-    production.attachEvent('onRowSelect', refill_prms);
-    production.attachEvent('onEditCell', (stage, rId, cInd) => {
-      !cInd && setTimeout(refill_prms);
-    });
-  }
-
-  // переопределяем страницы формы
-  draw_tabular_sections(dp, wnd, tabular_init) {
-
-    this.wnd = wnd;
-    wnd.maximize();
-
-    const {elmnts} = wnd;
-    elmnts.frm_toolbar.hideItem('bs_print');
-
-    // добавляем layout на первую страницу
-    wnd.detachObject(true);
-    wnd.maximize();
-    elmnts.layout = wnd.attachLayout({
-      pattern: '2E',
-      cells: [{
-        id: 'a',
-        text: 'Продукция',
-        header: false,
-      }, {
-        id: 'b',
-        text: 'Параметры',
-        header: false,
-      }],
-      offsets: {top: 0, right: 0, bottom: 0, left: 0},
-    });
-
-    // добавляем табчасть продукции
-    this.meta_production = $p.dp.buyers_order.metadata('production').fields._clone();
-    elmnts.grids.production = elmnts.layout.cells('a').attachTabular({
-      metadata: this.meta_production,
-      obj: dp,
-      ts: 'production',
-      pwnd: wnd,
-    });
-
-    // добавляем табчасть пареметров
-    elmnts.grids.params = elmnts.layout.cells('b').attachHeadFields({
-      obj: dp,
-      ts: 'product_params',
-      pwnd: wnd,
-      selection: {elm: -1},
-      oxml: {'Параметры продукции': []},
-    });
-
-    const height = elmnts.layout.cells('a').getHeight() + elmnts.layout.cells('b').getHeight();
-    elmnts.layout.cells('a').setHeight(height * 0.7);
-
-  }
-
-  // команды формы
-  toolbar_click(btn_id) {
-    if (btn_id == 'btn_ok') {
-      this.dp._data._modified = false;
-      this.dp.calc_order.process_add_product_list(this.dp)
-        .then(() => {
-          this.wnd.close();
-          this.wnd = this.dp = this.attr = null;
-        })
-        .catch((err) => {
-
-        });
-    }
-  }
-
-  refill_prms() {
-    const {meta_production, wnd} = this;
-    const {production, params} = wnd.elmnts.grids;
-    if (production && params) {
-      const row = production.get_cell_field();
-      if (row) {
-        params.selection = {elm: row.obj.row};
-        if (!row.obj.inset.empty()) {
-          $p.cat.clrs.selection_exclude_service(meta_production.clr, row.obj.inset);
-        }
-      }
-    }
-  }
-
-};
 
 
 /**
@@ -4131,6 +3296,20 @@ class CalcOrderFormProductList {
 // переопределяем формирование списка выбора
 $p.doc.calc_order.metadata().tabular_sections.production.fields.characteristic._option_list_local = true;
 
+// переопределяем объекты назначения дополнительных реквизитов
+$p.doc.calc_order._destinations_condition = {predefined_name: {in: ['Документ_Расчет', 'Документ_ЗаказПокупателя']}};
+
+// индивидуальная строка поиска
+$p.doc.calc_order.build_search = function (tmp, obj) {
+
+  const {number_internal, client_of_dealer, partner, note} = obj;
+
+  tmp.search = (obj.number_doc +
+    (number_internal ? ' ' + number_internal : '') +
+    (client_of_dealer ? ' ' + client_of_dealer : '') +
+    (partner.name ? ' ' + partner.name : '') +
+    (note ? ' ' + note : '')).toLowerCase();
+};
 
 // метод загрузки шаблонов
 $p.doc.calc_order.load_templates = async function () {
@@ -4223,7 +3402,7 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
       if(this.obj_delivery_state == Отклонен || this.obj_delivery_state == Отозван || this.obj_delivery_state == Шаблон) {
         $p.msg.show_msg && $p.msg.show_msg({
           type: 'alert-warning',
-          text: 'Нельзя провести заказ со статусом<br/>\'Отклонён\', \'Отозван\' или \'Шаблон\'',
+          text: 'Нельзя провести заказ со статусом<br/>"Отклонён", "Отозван" или "Шаблон"',
           title: this.presentation
         });
         return false;
@@ -4243,13 +3422,13 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
     else if(this.department.empty()) {
       $p.msg.show_msg && $p.msg.show_msg({
         type: 'alert-warning',
-        text: 'Не заполнен реквизит \'офис продаж\' (подразделение)',
+        text: 'Не заполнен реквизит "офис продаж" (подразделение)',
         title: this.presentation
       });
       return false;
     }
 
-    this.production.each((row) => {
+    this.production.forEach((row) => {
 
       doc_amount += row.amount;
       amount_internal += row.amount_internal;
@@ -4263,7 +3442,7 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
       //     sys_profile += name;
       //   }
       //
-      //   row.characteristic.constructions.each((row) => {
+      //   row.characteristic.constructions.forEach((row) => {
       //   	if(row.parent && !row.furn.empty()){
       //   		const name = row.furn.name_short || row.furn.name;
       //   		if(sys_furn.indexOf(name) == -1){
@@ -4284,16 +3463,16 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
     //this.sys_furn = sys_furn;
     this.amount_operation = $p.pricing.from_currency_to_currency(doc_amount, this.date, this.doc_currency).round(rounding);
 
-    const {_obj, obj_delivery_state, category, number_internal, partner, client_of_dealer, note} = this;
+    const {_obj, obj_delivery_state, category} = this;
 
     // фильтр по статусу
     if(obj_delivery_state == 'Шаблон') {
       _obj.state = 'template';
     }
-    else if(category == 'Сервис') {
+    else if(category == 'service') {
       _obj.state = 'service';
     }
-    else if(category == 'Рекламация') {
+    else if(category == 'complaints') {
       _obj.state = 'complaints';
     }
     else if(obj_delivery_state == 'Отправлен') {
@@ -4312,12 +3491,25 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
       _obj.state = 'draft';
     }
 
-    // строка поиска
-    _obj.search = (this.number_doc +
-      (number_internal ? ' ' + number_internal : '') +
-      (client_of_dealer ? ' ' + client_of_dealer : '') +
-      (partner.name ? ' ' + partner.name : '') +
-      (note ? ' ' + note : '')).toLowerCase();
+    // пометим на удаление неиспользуемые характеристики
+    // этот кусок не влияет на возвращаемое before_save значение и выполняется асинхронно
+    this._manager.pouch_db.query('svgs', {startkey: [this.ref, 0], endkey: [this.ref, 10e9]})
+      .then(({rows}) => {
+        const deleted = [];
+        for (const {id} of rows) {
+          const ref = id.substr(20);
+          if(this.production.find_rows({characteristic: ref}).length) {
+            continue;
+          }
+          deleted.push($p.cat.characteristics.get(ref, 'promise')
+            .then((ox) => !ox._deleted && ox.mark_deleted(true)));
+        }
+        return Promise.all(deleted);
+      })
+      .then((res) => {
+        res.length && this._manager.emit_async('svgs', this);
+      })
+      .catch((err) => null);
 
   }
 
@@ -4346,12 +3538,16 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
     return currency.empty() ? $p.job_prm.pricing.main_currency : currency;
   }
 
+  set doc_currency(v) {
+
+  }
+
   get rounding() {
     const {pricing} = $p.job_prm;
-    if(!pricing.hasOwnProperty('rounding')){
+    if(!pricing.hasOwnProperty('rounding')) {
       const parts = this.doc_currency.parameters_russian_recipe.split(',');
       pricing.rounding = parseInt(parts[parts.length - 1]);
-      if(isNaN(pricing.rounding)){
+      if(isNaN(pricing.rounding)) {
         pricing.rounding = 2;
       }
     }
@@ -4426,6 +3622,9 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
       ДоговорНомер: contract.number_doc ? contract.number_doc : this.number_doc,
       ДоговорСрокДействия: moment(contract.validity).format('L'),
       ЗаказНомер: this.number_doc,
+      //Примечание (комментарий) к расчету  и внутренний номер расчет-заказа
+      Примечание: this.note,
+      НомерВнутренний: this.number_internal,
       Контрагент: this.partner.presentation,
       КонтрагентОписание: this.partner.long_presentation,
       КонтрагентДокумент: '',
@@ -4612,6 +3811,11 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
       Цвет: characteristic.clr.name,
       Размеры: row.len + 'x' + row.width + ', ' + row.s + 'м²',
       Площадь: row.s,
+      //Отдельно размеры, общая площадь позиции и комментарий к позиции
+      Длинна: row.len,
+      Ширина: row.width,
+      ВсегоПлощадь: row.s*row.quantity,
+      Примечание: row.note,
       Номенклатура: nom.name_full || nom.name,
       Характеристика: characteristic.name,
       Заполнения: '',
@@ -4666,26 +3870,55 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
   }
 
   /**
-   * Заполняет табчасть планирования данными по умолчанию
+   * Заполняет табчасть планирования запросом к сервису windowbuilder-planning
    */
-  fill_plan(confirmed) {
+  fill_plan() {
 
-    // если табчасть не пустая - задаём вопрос
-    if(this.planning.count() && !confirmed) {
-      dhtmlx.confirm({
-        title: $p.msg.main_title,
-        text: $p.msg.tabular_will_cleared.replace('%1', 'Планирование'),
-        cancel: $p.msg.cancel,
-        callback: function (btn) {
-          if(btn) {
-            this.fill_plan(true);
-          }
-        }.bind(this)
-      });
-      return;
-    }
-
+    // чистим не стесняясь - при записи всё равно перезаполнять
     this.planning.clear();
+
+    // получаем url сервиса
+    const url = ($p.wsql.get_user_param('windowbuilder_planning', 'string') || '/plan/') + `doc.calc_order/${this.ref}`;
+
+    // сериализуем документ и характеристики
+    const post_data = this._obj._clone();
+    post_data.characteristics = {};
+
+    // получаем объекты характеристик и подклеиваем их сериализацию к post_data
+    this.load_production()
+      .then((prod) => {
+        for (const cx of prod) {
+          post_data.characteristics[cx.ref] = cx._obj._clone();
+        }
+      })
+      // выполняем запрос к сервису
+      .then(() => {
+        const headers = new Headers();
+        headers.append('Accept', 'application/json');
+        headers.append('Content-Type', 'application/json');
+        headers.append('Authorization', 'Basic ' + btoa(unescape(encodeURIComponent(
+          $p.wsql.get_user_param('user_name') + ':' + $p.aes.Ctr.decrypt($p.wsql.get_user_param('user_pwd'))))));
+        const suffix = $p.current_user.suffix || $p.wsql.get_user_param('couch_suffix', 'string');
+        if(suffix){
+          headers.append('suffix', suffix);
+        }
+        fetch(url, {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify(post_data)
+        })
+          .then(response => response.json())
+          // заполняем табчасть
+          .then(json => console.log(json))
+          .catch(err => {
+            $p.msg.show_msg({
+              type: "alert-warning",
+              text: err.message,
+              title: "Сервис планирования"
+            });
+            $p.record_log(err);
+          });
+      });
 
   }
 
@@ -4723,7 +3956,7 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
         prod.push(characteristic.ref);
       }
     });
-    return (mgr.adapter.load_array(mgr, prod))
+    return mgr.adapter.load_array(mgr, prod)
       .then(() => {
         prod.length = 0;
         this.production.forEach((row) => {
@@ -4752,6 +3985,7 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
     //nom,characteristic,note,quantity,unit,qty,len,width,s,first_cost,marginality,price,discount_percent,discount_percent_internal,
     //discount,amount,margin,price_internal,amount_internal,vat_rate,vat_amount,ordn,changed
 
+    row._data._loading = true;
     row.nom = ox.owner;
     row.note = _dp.note;
     row.quantity = _dp.quantity || 1;
@@ -4763,6 +3997,7 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
     if(row.unit.owner != row.nom) {
       row.unit = row.nom.storage_unit;
     }
+    row._data._loading = false;
   }
 
   /**
@@ -4824,7 +4059,7 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
 
           if(params) {
             params.find_rows({elm: row_spec.row}, (prow) => {
-              ox.params.add(prow, true);
+              ox.params.add(prow, true).inset = row_spec.inset;
             });
           }
         }
@@ -4845,7 +4080,7 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
         ox.name = ox.prod_name();
 
         // записываем расчет, если не сделали этого ранее, чтобы не погибла ссылка на расчет в характеристике
-        return this.is_new() ? this.save().then(() => row) : row;
+        return this.is_new() && !$p.wsql.alasql.utils.isNode ? this.save().then(() => row) : row;
       });
 
   }
@@ -4975,27 +4210,58 @@ $p.DocCalc_orderProductionRow = class DocCalc_orderProductionRow extends $p.DocC
   // при изменении реквизита
   value_change(field, type, value, no_extra_charge) {
 
-    const {_obj, _owner} = this;
+    let {_obj, _owner, nom, characteristic, unit} = this;
+    let recalc;
     const {rounding} = _owner._owner;
 
     if(field == 'nom' || field == 'characteristic' || field == 'quantity') {
+
       _obj[field] = field == 'quantity' ? parseFloat(value) : '' + value;
-      const {characteristic} = this;
-      if(!characteristic.empty() && !characteristic.calc_order.empty()) {
-        const fake_prm = {
-          spec: characteristic.specification,
-          calc_order_row: this
-        };
-        $p.pricing.price_type(fake_prm);
-        $p.pricing.calc_first_cost(fake_prm);
-        $p.pricing.calc_amount(fake_prm);
+
+      nom = this.nom;
+      characteristic = this.characteristic;
+
+      // проверим владельца характеристики
+      if(!characteristic.empty()) {
+        if(!characteristic.calc_order.empty() && characteristic.owner != nom) {
+          characteristic.owner = nom;
+        }
+        else if(characteristic.owner != nom) {
+          _obj.characteristic = $p.utils.blank.guid;
+          characteristic = this.characteristic;
+        }
+      }
+
+      // проверим единицу измерения
+      if(unit.owner != nom) {
+        _obj.unit = nom.storage_unit.ref;
+      }
+
+      // рассчитаем цены
+      const fake_prm = {
+        calc_order_row: this,
+        spec: characteristic.specification
+      };
+      const {price} = _obj;
+      $p.pricing.price_type(fake_prm);
+      $p.pricing.calc_first_cost(fake_prm);
+      $p.pricing.calc_amount(fake_prm);
+      if(price && !_obj.price) {
+        _obj.price = price;
+        recalc = true;
       }
     }
 
-    if(field == 'price' || field == 'price_internal' || field == 'quantity' ||
-      field == 'discount_percent' || field == 'discount_percent_internal') {
+    if('price_internal,quantity,discount_percent_internal'.indexOf(field) != -1 || recalc) {
 
-      _obj[field] = parseFloat(value);
+      if(!recalc) {
+        _obj[field] = parseFloat(value);
+      }
+
+      isNaN(_obj.price) && (_obj.price = 0);
+      isNaN(_obj.price_internal) && (_obj.price_internal = 0);
+      isNaN(_obj.discount_percent) && (_obj.discount_percent = 0);
+      isNaN(_obj.discount_percent_internal) && (_obj.discount_percent_internal = 0);
 
       _obj.amount = (_obj.price * ((100 - _obj.discount_percent) / 100) * _obj.quantity).round(rounding);
 
@@ -5021,8 +4287,8 @@ $p.DocCalc_orderProductionRow = class DocCalc_orderProductionRow extends $p.DocC
       const doc = _owner._owner;
       if(doc.vat_consider) {
         const {НДС18, НДС18_118, НДС10, НДС10_110, НДС20, НДС20_120, НДС0, БезНДС} = $p.enm.vat_rates;
-        _obj.vat_rate = this.nom.vat_rate.empty() ? НДС18 : this.nom.vat_rate;
-        switch (_obj.vat_rate) {
+        _obj.vat_rate = (nom.vat_rate.empty() ? НДС18 : nom.vat_rate).ref;
+        switch (this.vat_rate) {
         case НДС18:
         case НДС18_118:
           _obj.vat_amount = (_obj.amount * 18 / 118).round(2);
@@ -5037,6 +4303,8 @@ $p.DocCalc_orderProductionRow = class DocCalc_orderProductionRow extends $p.DocC
           break;
         case НДС0:
         case БезНДС:
+        case '_':
+        case '':
           _obj.vat_amount = 0;
           break;
         }
@@ -5045,12 +4313,16 @@ $p.DocCalc_orderProductionRow = class DocCalc_orderProductionRow extends $p.DocC
         }
       }
       else {
-        _obj.vat_rate = $p.enm.vat_rates.БезНДС;
+        _obj.vat_rate = '';
         _obj.vat_amount = 0;
       }
 
-      doc.doc_amount = _owner.aggregate([], ['amount']).round(rounding);
-      doc.amount_internal = _owner.aggregate([], ['amount_internal']).round(rounding);
+      const amount = _owner.aggregate([], ['amount', 'amount_internal']);
+      amount.doc_amount = amount.amount.round(rounding);
+      amount.amount_internal = amount.amount_internal.round(rounding);
+      delete amount.amount;
+      Object.assign(doc, amount);
+      doc._manager.emit_async('update', doc, amount);
 
       // TODO: учесть валюту документа, которая может отличаться от валюты упр. учета и решить вопрос с amount_operation
 
@@ -5058,7 +4330,7 @@ $p.DocCalc_orderProductionRow = class DocCalc_orderProductionRow extends $p.DocC
     }
   }
 
-}
+};
 
 
 return $p;

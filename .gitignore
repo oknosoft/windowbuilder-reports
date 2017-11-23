@@ -3,3 +3,4 @@
 src/
 localstorage/
 node_modules/
+/package-lock.json
