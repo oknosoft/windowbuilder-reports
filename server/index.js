@@ -1,12 +1,10 @@
-#!/usr/bin/env node
-
 'use strict';
 
-import Koa from 'koa';
+const Koa = require('koa');
 const app = new Koa();
 
 // Register the router as Koa middleware
-import rep from './server/router';
+import rep from './router';
 app.use(rep.middleware());
 
 app.listen(process.env.PORT || 3000);

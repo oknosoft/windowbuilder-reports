@@ -10,10 +10,11 @@
     "npm": "^5.5"
   },
   "scripts": {
-    "start": "node --experimental-modules ./index.mjs",
+    "start": "node ./index",
+    "build": "node ./scripts/build",
     "canvas": "apt-get install libcairo2-dev libjpeg62-turbo-dev libpango1.0-dev libgif-dev build-essential g++",
     "meta:prebuild": "node ./scripts/meta.prebuild",
-    "meta:link": "node scripts/meta.link.js"
+    "meta:link": "node scripts/meta.link"
   },
   "dependencies": {
     "@koa/cors": "^2.2.1",
@@ -35,7 +36,12 @@
     "gulp-rename": "^1.2",
     "gulp-replace": "^0.6.1",
     "gulp-strip-comments": "^2.5.1",
-    "gulp-wrap": "^0.13.0"
+    "gulp-wrap": "^0.13.0",
+    "rollup": "^0.51",
+    "rollup-plugin-cleanup": "^2.0",
+    "rollup-plugin-node-builtins": "^2.1.2",
+    "rollup-plugin-node-resolve": "^3.0.0",
+    "rollup-plugin-replace": "^2.0.0"
   },
   "homepage": "http://www.oknosoft.ru/zd/",
   "repository": {

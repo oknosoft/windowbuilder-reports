@@ -2,8 +2,7 @@
 
 import $p from './metadata';
 
-import logger from 'debug';
-const debug = logger('wb:paper');
+const debug = require('debug')('wb:paper');
 
 import paper from 'paper/dist/paper-core.js';
 debug('required');
@@ -9373,10 +9372,12 @@ class Scheme extends paper.Project {
    * Перерисовавает визуализацию контуров изделия
    */
   draw_visualization() {
-    for (let contour of this.contours) {
-      contour.draw_visualization();
+    if(this.view){
+      for (let contour of this.contours) {
+        contour.draw_visualization();
+      }
+      this.view.update();
     }
-    this.view.update();
   }
 
   /**

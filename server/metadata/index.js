@@ -2,13 +2,12 @@
 // модификаторы data-объектов
 import modifiers from './modifiers';
 
-import modifiersNew from './modifiersNew'
+import modifiersNew from './modifiersNew';
 
 // дополняем прототип Object методами observe
 import './observe';
 
-import logger from 'debug';
-const debug = logger('wb:meta');
+const debug = require('debug')('wb:meta');
 
 // конструктор MetaEngine
 import metaCore from 'metadata-core';
@@ -16,10 +15,10 @@ import metaPouchdb from 'metadata-pouchdb';
 const MetaEngine = metaCore.plugin(metaPouchdb);
 
 // функция установки параметров сеанса
-import settings from '../../config/report.settings';
+const settings = require('./config/report.settings');
 
 // функция инициализации структуры метаданных
-import meta_init from './init';
+const meta_init = require('./server/metadata/init.js');
 
 debug('required');
 
@@ -53,7 +52,6 @@ meta_pouchdb($p.classes.DataManager.prototype);
   adapters.pouch.init(wsql, job_prm);
 
   // подключим модификаторы
-  //debugger;
   modifiers($p);
   modifiersNew($p);
   debug('inited & modified');
