@@ -21,13 +21,13 @@
     "koa": "^2.4.1",
     "koa-better-router": "^2.1",
     "md5-file": "^3.2.3",
-    "metadata-abstract-ui": "^2.0.16-beta.40",
-    "metadata-core": "^2.0.16-beta.40",
-    "metadata-pouchdb": "^2.0.16-beta.40",
+    "metadata-abstract-ui": "^2.0.16-beta.41",
+    "metadata-core": "^2.0.16-beta.41",
+    "metadata-pouchdb": "^2.0.16-beta.41",
     "paper-jsdom-canvas": "^0.11.5"
   },
   "devDependencies": {
-    "eslint": "^4.11.0",
+    "eslint": "^4.12.0",
     "eslint-config-react-app": "^2.0.1",
     "eslint-plugin-promise": "^3.6.0",
     "eslint-plugin-react": "^7.5.1",
