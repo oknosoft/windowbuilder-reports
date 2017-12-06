@@ -10203,11 +10203,12 @@ function snake_ref(ref) {
 }
 async function glasses({project, view, prod, res}) {
   for(const ox of prod){
-    const {_obj: {glasses, coordinates}} = ox;
+    const {_obj: {glasses, coordinates}, name} = ox;
     const ref = snake_ref(ox.ref);
     res[ref] = {
       glasses: glasses,
       imgs: {},
+      name,
     };
     if(coordinates && coordinates.length){
       await project.load(ox, true);
@@ -10229,7 +10230,7 @@ async function prod(ctx, next) {
   const prod = await calc_order.load_production(true);
   const res = {number_doc: calc_order.number_doc};
   const {query} = require('url').parse(ctx.req.url);
-  if(query.indexOf('glasses') !== -1) {
+  if(query && query.indexOf('glasses') !== -1) {
     await glasses({project, view, prod, res});
   }
   else{
@@ -10389,6 +10390,8 @@ rep.loadMethods()
 
 const Koa = require('koa');
 const app = new Koa();
+const cors = require('@koa/cors');
+app.use(cors({credentials: true, maxAge: 600}));
 app.use(rep.middleware());
 app.listen(process.env.PORT || 3000);
 app.restrict_ips = process.env.IPS ? process.env.IPS.split(',') : [];

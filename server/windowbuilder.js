@@ -10207,11 +10207,12 @@ function snake_ref(ref) {
 async function glasses({project, view, prod, res}) {
   for(const ox of prod){
 
-    const {_obj: {glasses, coordinates}} = ox;
+    const {_obj: {glasses, coordinates}, name} = ox;
     const ref = snake_ref(ox.ref);
     res[ref] = {
       glasses: glasses,
       imgs: {},
+      name,
     };
 
     if(coordinates && coordinates.length){
@@ -10242,7 +10243,7 @@ async function prod(ctx, next) {
 
   const {query} = require('url').parse(ctx.req.url);
 
-  if(query.indexOf('glasses') !== -1) {
+  if(query && query.indexOf('glasses') !== -1) {
     await glasses({project, view, prod, res});
   }
   else{
