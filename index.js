@@ -1,5 +1,5 @@
 /*!
- windowbuilder-reports v2.0.233, built:2017-11-27
+ windowbuilder-reports v2.0.233, built:2017-12-06
  © 2014-2017 Evgeniy Malyarov and the Oknosoft team http://www.oknosoft.ru
  To obtain commercial license and technical support, contact info@oknosoft.ru
  */
@@ -1198,15 +1198,15 @@ $p.adapters.pouch.once('pouch_data_loaded', () => {
 });
 $p.CatFormulas.prototype.__define({
 	execute: {
-		value: function (obj) {
+		value: function (obj, attr) {
 			if(!this._data._formula && this.formula){
 			  try{
           if(this.async){
             const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
-            this._data._formula = (new AsyncFunction("obj,$p", this.formula)).bind(this);
+            this._data._formula = (new AsyncFunction("obj,$p,attr", this.formula)).bind(this);
           }
           else{
-            this._data._formula = (new Function("obj,$p", this.formula)).bind(this);
+            this._data._formula = (new Function("obj,$p,attr", this.formula)).bind(this);
           }
         }
         catch(err){
@@ -1224,11 +1224,11 @@ $p.CatFormulas.prototype.__define({
           });
           return Promise.resolve();
         }
-				return _formula(obj, $p)
+				return _formula(obj, $p, attr)
 					.then((doc) => doc instanceof $p.SpreadsheetDocument && doc.print());
 			}
 			else{
-        return _formula && _formula(obj, $p)
+        return _formula && _formula(obj, $p, attr)
       }
 		}
 	},
@@ -8702,7 +8702,7 @@ class ProfileAddl extends ProfileItem {
           }
         }
         if(with_addl){
-          elm.getItems({class: ProfileAddl}).forEach((addl) => {
+          elm.getItems({class: ProfileAddl, parent: elm}).forEach((addl) => {
             check_distance(addl, with_addl);
           });
         }
@@ -10198,55 +10198,85 @@ delete Scheme.prototype.zoom_fit;
 Scheme.prototype.zoom_fit = function () {
   Contour.prototype.zoom_fit.call(this);
 };
+function snake_ref(ref) {
+  return '_' + ref.replace(/-/g, '_');
+}
+async function glasses({project, view, prod, res}) {
+  for(const ox of prod){
+    const {_obj: {glasses, coordinates}} = ox;
+    const ref = snake_ref(ox.ref);
+    res[ref] = {
+      glasses: glasses,
+      imgs: {},
+    };
+    if(coordinates && coordinates.length){
+      await project.load(ox, true);
+      ox.glasses.forEach((row) => {
+        const glass = project.draw_fragment({elm: row.elm});
+        res[ref].imgs[`g${row.elm}`] = view.element.toBuffer().toString('base64');
+        if(glass){
+          row.formula = glass.formula(true);
+          glass.visible = false;
+        }
+      });
+    }
+  }
+}
 async function prod(ctx, next) {
   const {project, view} = new Editor();
   const {nom} = $p.cat;
   const calc_order = await $p.doc.calc_order.get(ctx.params.ref, 'promise');
   const prod = await calc_order.load_production(true);
   const res = {number_doc: calc_order.number_doc};
-  for(let ox of prod){
-    const {_obj} = ox;
-    const ref = '_' + ox.ref.replace(/-/g, '_');
-    res[ref] = {
-      constructions: _obj.constructions,
-      coordinates: _obj.coordinates,
-      specification: _obj.specification.map((o) => {
-        const onom = nom.get(o.nom);
-        return Object.assign(o, {article: onom.article})
-      }),
+  const {query} = require('url').parse(ctx.req.url);
+  if(query.indexOf('glasses') !== -1) {
+    await glasses({project, view, prod, res});
+  }
+  else{
+    for(let ox of prod){
+      const {_obj} = ox;
+      const ref = snake_ref(ox.ref);
+      res[ref] = {
+        constructions: _obj.constructions,
+        coordinates: _obj.coordinates,
+        specification: _obj.specification.map((o) => {
+          const onom = nom.get(o.nom);
+      return Object.assign(o, {article: onom.article})
+    }),
       glasses: _obj.glasses,
-      params: _obj.params,
-      clr: _obj.clr,
-      sys: _obj.sys,
-      x: _obj.x,
-      y: _obj.y,
-      z: _obj.z,
-      s: _obj.s,
-      weight: _obj.weight,
-      origin: _obj.origin,
-      leading_elm: _obj.leading_elm,
-      leading_product: _obj.leading_product,
-      product: _obj.product,
+        params: _obj.params,
+        clr: _obj.clr,
+        sys: _obj.sys,
+        x: _obj.x,
+        y: _obj.y,
+        z: _obj.z,
+        s: _obj.s,
+        weight: _obj.weight,
+        origin: _obj.origin,
+        leading_elm: _obj.leading_elm,
+        leading_product: _obj.leading_product,
+        product: _obj.product,
     };
-    if(_obj.coordinates && _obj.coordinates.length){
-      await project.load(ox, true);
-      await Promise.resolve().then(() => {
-        res[ref].imgs = {
-          'l0': view.element.toBuffer().toString('base64')
-        };
+      if(_obj.coordinates && _obj.coordinates.length){
+        await project.load(ox, true);
+        await Promise.resolve().then(() => {
+          res[ref].imgs = {
+            'l0': view.element.toBuffer().toString('base64')
+          };
         ox.constructions.forEach(({cnstr}) => {
           project.draw_fragment({elm: -cnstr});
-          res[ref].imgs[`l${cnstr}`] = view.element.toBuffer().toString('base64');
-        });
+        res[ref].imgs[`l${cnstr}`] = view.element.toBuffer().toString('base64');
+      });
         ox.glasses.forEach((row) => {
           const glass = project.draw_fragment({elm: row.elm});
-          res[ref].imgs[`g${row.elm}`] = view.element.toBuffer().toString('base64');
-          if(glass){
-            row.formula = glass.formula(true);
-            glass.visible = false;
-          }
-        });
+        res[ref].imgs[`g${row.elm}`] = view.element.toBuffer().toString('base64');
+        if(glass){
+          row.formula = glass.formula(true);
+          glass.visible = false;
+        }
       });
+      });
+      }
     }
   }
   ctx.body = res;

@@ -7616,7 +7616,7 @@ class ProfileAddl extends ProfileItem {
         }
 
         if(with_addl){
-          elm.getItems({class: ProfileAddl}).forEach((addl) => {
+          elm.getItems({class: ProfileAddl, parent: elm}).forEach((addl) => {
             check_distance(addl, with_addl);
           });
         }
@@ -10199,6 +10199,38 @@ Scheme.prototype.zoom_fit = function () {
   Contour.prototype.zoom_fit.call(this);
 }
 
+function snake_ref(ref) {
+  return '_' + ref.replace(/-/g, '_');
+}
+
+// формирует структуру с эскизами заполнений
+async function glasses({project, view, prod, res}) {
+  for(const ox of prod){
+
+    const {_obj: {glasses, coordinates}} = ox;
+    const ref = snake_ref(ox.ref);
+    res[ref] = {
+      glasses: glasses,
+      imgs: {},
+    };
+
+    if(coordinates && coordinates.length){
+      await project.load(ox, true);
+
+      ox.glasses.forEach((row) => {
+        const glass = project.draw_fragment({elm: row.elm});
+        // подтянем формулу стеклопакета
+        res[ref].imgs[`g${row.elm}`] = view.element.toBuffer().toString('base64');
+        if(glass){
+          row.formula = glass.formula(true);
+          glass.visible = false;
+        }
+      });
+    }
+  }
+}
+
+
 // формирует json описания продукции с эскизами
 async function prod(ctx, next) {
 
@@ -10208,60 +10240,67 @@ async function prod(ctx, next) {
   const prod = await calc_order.load_production(true);
   const res = {number_doc: calc_order.number_doc};
 
-  for(let ox of prod){
+  const {query} = require('url').parse(ctx.req.url);
 
-    // project.draw_fragment({elm: -1});
-    // view.update();
-    // ctx.type = 'image/png';
-    // ctx.body = return view.element.toBuffer();
+  if(query.indexOf('glasses') !== -1) {
+    await glasses({project, view, prod, res});
+  }
+  else{
+    for(let ox of prod){
 
-    const {_obj} = ox;
-    const ref = '_' + ox.ref.replace(/-/g, '_');
-    res[ref] = {
-      constructions: _obj.constructions,
-      coordinates: _obj.coordinates,
-      specification: _obj.specification.map((o) => {
-        const onom = nom.get(o.nom);
-        return Object.assign(o, {article: onom.article})
-      }),
+      // project.draw_fragment({elm: -1});
+      // view.update();
+      // ctx.type = 'image/png';
+      // ctx.body = return view.element.toBuffer();
+
+      const {_obj} = ox;
+      const ref = snake_ref(ox.ref);
+      res[ref] = {
+        constructions: _obj.constructions,
+        coordinates: _obj.coordinates,
+        specification: _obj.specification.map((o) => {
+          const onom = nom.get(o.nom);
+      return Object.assign(o, {article: onom.article})
+    }),
       glasses: _obj.glasses,
-      params: _obj.params,
-      clr: _obj.clr,
-      sys: _obj.sys,
-      x: _obj.x,
-      y: _obj.y,
-      z: _obj.z,
-      s: _obj.s,
-      weight: _obj.weight,
-      origin: _obj.origin,
-      leading_elm: _obj.leading_elm,
-      leading_product: _obj.leading_product,
-      product: _obj.product,
+        params: _obj.params,
+        clr: _obj.clr,
+        sys: _obj.sys,
+        x: _obj.x,
+        y: _obj.y,
+        z: _obj.z,
+        s: _obj.s,
+        weight: _obj.weight,
+        origin: _obj.origin,
+        leading_elm: _obj.leading_elm,
+        leading_product: _obj.leading_product,
+        product: _obj.product,
     };
 
-    if(_obj.coordinates && _obj.coordinates.length){
+      if(_obj.coordinates && _obj.coordinates.length){
 
-      await project.load(ox, true);
-      await Promise.resolve().then(() => {
-        res[ref].imgs = {
-          'l0': view.element.toBuffer().toString('base64')
-        };
+        await project.load(ox, true);
+        await Promise.resolve().then(() => {
+          res[ref].imgs = {
+            'l0': view.element.toBuffer().toString('base64')
+          };
 
         ox.constructions.forEach(({cnstr}) => {
           project.draw_fragment({elm: -cnstr});
-          res[ref].imgs[`l${cnstr}`] = view.element.toBuffer().toString('base64');
-        });
+        res[ref].imgs[`l${cnstr}`] = view.element.toBuffer().toString('base64');
+      });
 
         ox.glasses.forEach((row) => {
           const glass = project.draw_fragment({elm: row.elm});
-          // подтянем формулу стеклопакета
-          res[ref].imgs[`g${row.elm}`] = view.element.toBuffer().toString('base64');
-          if(glass){
-            row.formula = glass.formula(true);
-            glass.visible = false;
-          }
-        });
+        // подтянем формулу стеклопакета
+        res[ref].imgs[`g${row.elm}`] = view.element.toBuffer().toString('base64');
+        if(glass){
+          row.formula = glass.formula(true);
+          glass.visible = false;
+        }
       });
+      });
+      }
     }
   }
 
