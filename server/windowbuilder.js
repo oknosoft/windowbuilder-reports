@@ -190,7 +190,7 @@ const AbstractFilling = (superclass) => class extends superclass {
 /**
  * ### Контур (слой) изделия
  *
- * &copy; Evgeniy Malyarov http://www.oknosoft.ru 2014-2017
+ * &copy; Evgeniy Malyarov http://www.oknosoft.ru 2014-2018
  *
  * Created 24.07.2015
  *
@@ -2537,7 +2537,7 @@ class DimensionDrawer extends paper.Group {
 /**
  * ### Размерные линии на эскизе
  *
- * &copy; Evgeniy Malyarov http://www.oknosoft.ru 2014-2017
+ * &copy; Evgeniy Malyarov http://www.oknosoft.ru 2014-2018
  *
  * Created 21.08.2015
  *
@@ -3003,7 +3003,7 @@ class DimensionLineCustom extends DimensionLine {
 
 /**
  * ### Базовый класс элементов построителя
- * &copy; Evgeniy Malyarov http://www.oknosoft.ru 2014-2017
+ * &copy; Evgeniy Malyarov http://www.oknosoft.ru 2014-2018
  *
  * Created 24.07.2015
  *
@@ -3330,7 +3330,9 @@ class BuilderElement extends paper.Group {
         cnn3: cnn3,
         arc_h: arc_h,
         r: _xfields.r,
-        arc_ccw: _xfields.arc_ccw
+        arc_ccw: _xfields.arc_ccw,
+        a1: Object.assign({}, _xfields.x1, {synonym: "Угол1"}),
+        a2: Object.assign({}, _xfields.x1, {synonym: "Угол2"}),
       }
     };
   }
@@ -3471,12 +3473,12 @@ class BuilderElement extends paper.Group {
         obj: this,
         oxml: this.oxml
       });
-      this._attr._grid.attachEvent("onRowSelect", function(id){
-        if(["x1","y1","cnn1"].indexOf(id) != -1){
-          this._obj.select_node("b");
+      this._attr._grid.attachEvent('onRowSelect', function (id) {
+        if(['x1', 'y1', 'a1', 'cnn1'].indexOf(id) != -1) {
+          this._obj.select_node('b');
         }
-        else if(["x2","y2","cnn2"].indexOf(id) != -1){
-          this._obj.select_node("e");
+        else if(['x2', 'y2', 'a2', 'cnn2'].indexOf(id) != -1) {
+          this._obj.select_node('e');
         }
       });
     }
@@ -3632,7 +3634,7 @@ Editor.BuilderElement = BuilderElement;
 
 /**
  * Created 24.07.2015<br />
- * &copy; http://www.oknosoft.ru 2014-2015
+ * &copy; http://www.oknosoft.ru 2014-2018
  * @author	Evgeniy Malyarov
  *
  * @module geometry
@@ -4373,7 +4375,7 @@ Editor.Filling = Filling;
 /**
  *
  * Created 21.08.2015<br />
- * &copy; http://www.oknosoft.ru 2014-2015
+ * &copy; http://www.oknosoft.ru 2014-2018
  * @author    Evgeniy Malyarov
  *
  * @module geometry
@@ -4891,7 +4893,7 @@ class GeneratrixElement extends BuilderElement {
 /**
  * Расширения объектов paper.js
  *
- * &copy; http://www.oknosoft.ru 2014-2017
+ * &copy; http://www.oknosoft.ru 2014-2018
  * @author	Evgeniy Malyarov
  *
  * @module geometry
@@ -5402,7 +5404,7 @@ Object.defineProperties(paper.Point.prototype, {
 
 /**
  * Created 24.07.2015<br />
- * &copy; http://www.oknosoft.ru 2014-2017
+ * &copy; http://www.oknosoft.ru 2014-2018
  * @author  Evgeniy Malyarov
  *
  * @module geometry
@@ -5838,6 +5840,47 @@ class ProfileItem extends GeneratrixElement {
     }
   }
 
+  angle_at(p) {
+    const {profile, point} = this.cnn_point(p);
+    if(!profile || !point) {
+      return 90;
+    }
+    const g1 = this.generatrix;
+    const g2 = profile.generatrix;
+    let offset1 = g1.getOffsetOf(g1.getNearestPoint(point)),
+      offset2 = g2.getOffsetOf(g2.getNearestPoint(point));
+    if(offset1 < 10){
+      offset1 = 10;
+    }
+    else if(Math.abs(offset1 - g1.length) < 10){
+      offset1 = g1.length - 10;
+    }
+    if(offset2 < 10){
+      offset2 = 10;
+    }
+    else if(Math.abs(offset2 - g2.length) < 10){
+      offset2 = g2.length - 10;
+    }
+    const t1 = g1.getTangentAt(offset1);
+    const t2 = g2.getTangentAt(offset2);
+    const a = t2.negate().getDirectedAngle(t1).round(1);
+    return a > 180 ? a - 180 : (a < 0 ? -a : a);
+  }
+
+  /**
+   * Угол к соседнему элементу в точке 'b'
+   */
+  get a1() {
+    return this.angle_at('b');
+  }
+
+  /**
+   * Угол к соседнему элементу в точке 'e'
+   */
+  get a2() {
+    return this.angle_at('e');
+  }
+
   /**
    * информация для диалога свойств
    *
@@ -6043,8 +6086,8 @@ class ProfileItem extends GeneratrixElement {
         'inset',
         'clr'
       ],
-      'Начало': ['x1', 'y1', 'cnn1'],
-      'Конец': ['x2', 'y2', 'cnn2']
+      'Начало': ['x1','y1','a1','cnn1'],
+      'Конец': ['x2','y2','a2','cnn2']
     };
     if(this.selected_cnn_ii()) {
       oxml['Примыкание'] = ['cnn3'];
@@ -7583,7 +7626,7 @@ Editor.ProfileItem = ProfileItem;
 
 /**
  *
- * &copy; Evgeniy Malyarov http://www.oknosoft.ru 2014-2017
+ * &copy; Evgeniy Malyarov http://www.oknosoft.ru 2014-2018
  *
  * Created 16.05.2016
  *
@@ -7900,7 +7943,7 @@ class ProfileAddl extends ProfileItem {
 
 /**
  *
- * &copy; Evgeniy Malyarov http://www.oknosoft.ru 2014-2017
+ * &copy; Evgeniy Malyarov http://www.oknosoft.ru 2014-2018
  *
  * Created 16.05.2016
  *
@@ -8125,7 +8168,7 @@ Editor.ProfileConnective = ProfileConnective;
 
 /**
  * ### Опорная линия
- * &copy; Evgeniy Malyarov http://www.oknosoft.ru 2014-2017
+ * &copy; Evgeniy Malyarov http://www.oknosoft.ru 2014-2018
  *
  * Created 16.05.2016
  *
@@ -8292,7 +8335,7 @@ BaseLine.oxml = {
 
 /**
  * ### Раскладка
- * &copy; Evgeniy Malyarov http://www.oknosoft.ru 2014-2017
+ * &copy; Evgeniy Malyarov http://www.oknosoft.ru 2014-2018
  *
  * Created 16.05.2016
  *
@@ -8612,7 +8655,7 @@ class Onlay extends ProfileItem {
 
 /**
  *
- * &copy; Evgeniy Malyarov http://www.oknosoft.ru 2014-2017
+ * &copy; Evgeniy Malyarov http://www.oknosoft.ru 2014-2018
  *
  * Created 24.07.2015
  *
@@ -9295,7 +9338,7 @@ class Scheme extends paper.Project {
     const layers = [];
     const profiles = new Set;
 
-    const {auto_align} = this;
+    const {auto_align, _dp} = this;
 
     for (const item of this.selectedItems) {
       const {parent, layer} = item;
@@ -9348,6 +9391,8 @@ class Scheme extends paper.Project {
 
     // при необходимости двигаем импосты
     other.length && this.do_align(auto_align, profiles);
+
+    _dp._manager.emit_async('update', {}, {x1: true, x2: true, y1: true, y2: true, a1: true, a2: true, cnn1: true, cnn2: true, info: true});
 
     // TODO: возможно, здесь надо подвигать примыкающие контуры
   }
@@ -10204,7 +10249,7 @@ class Scheme extends paper.Project {
 /**
  * ### Разрез
  *
- * &copy; Evgeniy Malyarov http://www.oknosoft.ru 2014-2017
+ * &copy; Evgeniy Malyarov http://www.oknosoft.ru 2014-2018
  *
  * Created 24.07.2015
  *
@@ -10596,7 +10641,7 @@ Editor.Sectional = Sectional;
 /**
  * ### Движок графического построителя
  *
- * &copy; Evgeniy Malyarov http://www.oknosoft.ru 2014-2017
+ * &copy; Evgeniy Malyarov http://www.oknosoft.ru 2014-2018
  *
  * @module geometry
  */

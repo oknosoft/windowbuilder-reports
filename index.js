@@ -1,6 +1,6 @@
 /*!
- windowbuilder-reports v2.0.233, built:2017-12-23
- © 2014-2017 Evgeniy Malyarov and the Oknosoft team http://www.oknosoft.ru
+ windowbuilder-reports v2.0.233, built:2018-01-17
+ © 2014-2018 Evgeniy Malyarov and the Oknosoft team http://www.oknosoft.ru
  To obtain commercial license and technical support, contact info@oknosoft.ru
  */
 
@@ -185,7 +185,8 @@ var modifiers = function($p) {
 	});
 })($p);
 $p.md.once('predefined_elmnts_inited', () => {
-  $p.cat.characteristics.pouch_load_view('doc/nom_characteristics')
+  const _mgr = $p.cat.characteristics;
+  _mgr.adapter.load_view(_mgr, 'doc/nom_characteristics')
     .then(() => {
     const {current_user} = $p;
       if(current_user && (
@@ -195,7 +196,7 @@ $p.md.once('predefined_elmnts_inited', () => {
         )) {
         return;
       }
-      $p.cat.characteristics.metadata().form.obj.tabular_sections.specification.widths = "50,*,70,*,50,70,70,80,70,70,70,0,0,0";
+      _mgr.metadata().form.obj.tabular_sections.specification.widths = "50,*,70,*,50,70,70,80,70,70,70,0,0,0";
     });
 });
 $p.CatCharacteristics = class CatCharacteristics extends $p.CatCharacteristics {
@@ -534,7 +535,7 @@ $p.cat.characteristics.form_obj = function (pwnd, attr) {
 							}
 						}
 					});
-					return crefs.length ? _mgr.pouch_load_array(crefs, true) : crefs;
+					return crefs.length ? _mgr.adapter.load_array(_mgr, crefs, true) : crefs;
 				})
 				.then(() => {
 					crefs.forEach((o) => {
@@ -549,7 +550,7 @@ $p.cat.characteristics.form_obj = function (pwnd, attr) {
 						if(!attr.filter || presentation.toLowerCase().match(attr.filter.toLowerCase()))
 							crefs.push({
 								ref: o.ref,
-								presentation: presentation,
+                presentation:   '<div style="white-space:normal"> ' + presentation + ' </div>',
 								svg: o._attachments ? o._attachments.svg : ""
 							});
 					});
@@ -1086,14 +1087,10 @@ Object.defineProperties($p.cat.divisions, {
   get_option_list: {
     value: function (selection, val) {
       const list = [];
-      $p.current_user.acl_objs.find_rows({type: "cat.divisions"}, (row) => {
-        if(list.indexOf(row.acl_obj) == -1){
-          list.push(row.acl_obj);
-          row.acl_obj._children().forEach((o) => {
-            if(list.indexOf(o) == -1){
-              list.push(o);
-            }
-          });
+      $p.current_user.acl_objs.find_rows({type: "cat.divisions"}, ({acl_obj}) => {
+        if(list.indexOf(acl_obj) == -1){
+          list.push(acl_obj);
+          acl_obj._children().forEach((o) => list.indexOf(o) == -1 && list.push(o));
         }
       });
       if(!list.length){
@@ -1178,7 +1175,7 @@ $p.CatElm_visualization.prototype.__define({
 });
 $p.adapters.pouch.once('pouch_data_loaded', () => {
   const {formulas} = $p.cat;
-  formulas.pouch_find_rows({_top: 500, _skip: 0})
+  formulas.adapter.find_rows(formulas, {_top: 500, _skip: 0})
     .then((rows) => {
       const parents = [formulas.predefined('printing_plates'), formulas.predefined('modifiers')];
       const filtered = rows.filter(v => !v.disabled && parents.indexOf(v.parent) !== -1);
@@ -2284,55 +2281,57 @@ $p.CatProduction_params.prototype.__define({
 		}
 	}
 });
-$p.doc.calc_order.metadata().tabular_sections.production.fields.characteristic._option_list_local = true;
-$p.doc.calc_order._destinations_condition = {predefined_name: {in: ['Документ_Расчет', 'Документ_ЗаказПокупателя']}};
-$p.doc.calc_order.build_search = function (tmp, obj) {
-  const {number_internal, client_of_dealer, partner, note} = obj;
-  tmp.search = (obj.number_doc +
-    (number_internal ? ' ' + number_internal : '') +
-    (client_of_dealer ? ' ' + client_of_dealer : '') +
-    (partner.name ? ' ' + partner.name : '') +
-    (note ? ' ' + note : '')).toLowerCase();
-};
-$p.doc.calc_order.load_templates = async function () {
-  if(!$p.job_prm.builder) {
-    $p.job_prm.builder = {};
-  }
-  if(!$p.job_prm.builder.base_block) {
-    $p.job_prm.builder.base_block = [];
-  }
-  if(!$p.job_prm.pricing) {
-    $p.job_prm.pricing = {};
-  }
-  const {base_block} = $p.job_prm.builder;
-  $p.cat.production_params.forEach((o) => {
-    if(!o.is_folder) {
-      o.base_blocks.forEach((row) => {
-        if(base_block.indexOf(row.calc_order) == -1) {
-          base_block.push(row.calc_order);
-        }
-      });
+(function (_mgr) {
+  _mgr.metadata().tabular_sections.production.fields.characteristic._option_list_local = true;
+  _mgr._destinations_condition = {predefined_name: {in: ['Документ_Расчет', 'Документ_ЗаказПокупателя']}};
+  _mgr.build_search = function (tmp, obj) {
+    const {number_internal, client_of_dealer, partner, note} = obj;
+    tmp.search = (obj.number_doc +
+      (number_internal ? ' ' + number_internal : '') +
+      (client_of_dealer ? ' ' + client_of_dealer : '') +
+      (partner.name ? ' ' + partner.name : '') +
+      (note ? ' ' + note : '')).toLowerCase();
+  };
+  _mgr.load_templates = async function () {
+    if(!$p.job_prm.builder) {
+      $p.job_prm.builder = {};
     }
-  });
-  const refs = [];
-  for (let o of base_block) {
-    refs.push(o.ref);
-    if(refs.length > 9) {
-      await $p.doc.calc_order.pouch_load_array(refs);
-      refs.length = 0;
+    if(!$p.job_prm.builder.base_block) {
+      $p.job_prm.builder.base_block = [];
     }
-  }
-  if(refs.length) {
-    await $p.doc.calc_order.pouch_load_array(refs);
-  }
-  refs.length = 0;
-  base_block.forEach(({production}) => {
-    if(production.count()) {
-      refs.push(production.get(0).characteristic.ref);
+    if(!$p.job_prm.pricing) {
+      $p.job_prm.pricing = {};
     }
-  });
-  return $p.cat.characteristics.pouch_load_array(refs);
-};
+    const {base_block} = $p.job_prm.builder;
+    $p.cat.production_params.forEach((o) => {
+      if(!o.is_folder) {
+        o.base_blocks.forEach((row) => {
+          if(base_block.indexOf(row.calc_order) == -1) {
+            base_block.push(row.calc_order);
+          }
+        });
+      }
+    });
+    const refs = [];
+    for (let o of base_block) {
+      refs.push(o.ref);
+      if(refs.length > 9) {
+        await _mgr.adapter.load_array(_mgr, refs);
+        refs.length = 0;
+      }
+    }
+    if(refs.length) {
+      await _mgr.adapter.load_array(_mgr, refs);
+    }
+    refs.length = 0;
+    base_block.forEach(({production}) => {
+      if(production.count()) {
+        refs.push(production.get(0).characteristic.ref);
+      }
+    });
+    return $p.cat.characteristics.adapter.load_array($p.cat.characteristics, refs);
+  };
+})($p.doc.calc_order);
 $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
   after_create() {
     const {enm, cat, current_user, DocCalc_order} = $p;
@@ -2497,11 +2496,11 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
         return res;
       });
   }
-  print_data() {
+  print_data(attr = {}) {
     const {organization, bank_account, partner, contract, manager} = this;
     const our_bank_account = bank_account && !bank_account.empty() ? bank_account : organization.main_bank_account;
     const get_imgs = [];
-    const {contact_information_kinds} = $p.cat;
+    const {cat: {contact_information_kinds, characteristics}, utils: {blank, blob_as_text}} = $p;
     const res = {
       АдресДоставки: this.shipping_address,
       ВалютаДокумента: this.doc_currency.presentation,
@@ -2509,8 +2508,8 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
       ДатаЗаказаФорматDD: moment(this.date).format('LL'),
       ДатаТекущаяФорматD: moment().format('L'),
       ДатаТекущаяФорматDD: moment().format('LL'),
-      ДоговорДатаФорматD: moment(contract.date.valueOf() == $p.utils.blank.date.valueOf() ? this.date : contract.date).format('L'),
-      ДоговорДатаФорматDD: moment(contract.date.valueOf() == $p.utils.blank.date.valueOf() ? this.date : contract.date).format('LL'),
+      ДоговорДатаФорматD: moment(contract.date.valueOf() == blank.date.valueOf() ? this.date : contract.date).format('L'),
+      ДоговорДатаФорматDD: moment(contract.date.valueOf() == blank.date.valueOf() ? this.date : contract.date).format('LL'),
       ДоговорНомер: contract.number_doc ? contract.number_doc : this.number_doc,
       ДоговорСрокДействия: moment(contract.validity).format('L'),
       ЗаказНомер: this.number_doc,
@@ -2607,6 +2606,8 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
       ВсегоИзделий: 0,
       ВсегоПлощадьИзделий: 0,
       Продукция: [],
+      Аксессуары: [],
+      Услуги: [],
       НомерВнутр: this.number_internal,
       КлиентДилера: this.client_of_dealer,
       Комментарий: this.note,
@@ -2619,7 +2620,7 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
       if(key.indexOf('logo') != -1) {
         get_imgs.push(organization.get_attachment(key)
           .then((blob) => {
-            return $p.utils.blob_as_text(blob, blob.type.indexOf('svg') == -1 ? 'data_url' : '');
+            return blob_as_text(blob, blob.type.indexOf('svg') == -1 ? 'data_url' : '');
           })
           .then((data_url) => {
             res.ОрганизацияЛоготип = data_url;
@@ -2633,13 +2634,21 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
         res.Продукция.push(this.row_description(row));
         res.ВсегоИзделий += row.quantity;
         res.ВсегоПлощадьИзделий += row.quantity * row.s;
-        get_imgs.push($p.cat.characteristics.get_attachment(row.characteristic.ref, 'svg')
-          .then((blob) => $p.utils.blob_as_text(blob))
-          .then((svg_text) => {
-            res.ПродукцияЭскизы[row.characteristic.ref] = svg_text;
-          })
-          .catch((err) => err && err.status != 404 && $p.record_log(err))
-        );
+        if(attr.sizes === false) {
+        }
+        else {
+          get_imgs.push(characteristics.get_attachment(row.characteristic.ref, 'svg')
+            .then(blob_as_text)
+            .then((svg_text) => res.ПродукцияЭскизы[row.characteristic.ref] = svg_text)
+            .catch((err) => err && err.status != 404 && $p.record_log(err))
+          );
+        }
+      }
+      else if(!row.nom.is_procedure && !row.nom.is_service && row.nom.is_accessory) {
+        res.Аксессуары.push(this.row_description(row));
+      }
+      else if(!row.nom.is_procedure && row.nom.is_service && !row.nom.is_accessory) {
+        res.Услуги.push(this.row_description(row));
       }
     });
     res.ВсегоПлощадьИзделий = res.ВсегоПлощадьИзделий.round(3);
@@ -2728,7 +2737,8 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
   }
   fill_plan() {
     this.planning.clear();
-    const url = ($p.wsql.get_user_param('windowbuilder_planning', 'string') || '/plan/') + `doc.calc_order/${this.ref}`;
+    const {wsql, aes, current_user: {suffix}, msg} = $p;
+    const url = (wsql.get_user_param('windowbuilder_planning', 'string') || '/plan/') + `doc.calc_order/${this.ref}`;
     const post_data = this._obj._clone();
     post_data.characteristics = {};
     this.load_production()
@@ -2742,8 +2752,7 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
         headers.append('Accept', 'application/json');
         headers.append('Content-Type', 'application/json');
         headers.append('Authorization', 'Basic ' + btoa(unescape(encodeURIComponent(
-          $p.wsql.get_user_param('user_name') + ':' + $p.aes.Ctr.decrypt($p.wsql.get_user_param('user_pwd'))))));
-        const suffix = $p.current_user.suffix || $p.wsql.get_user_param('couch_suffix', 'string');
+          wsql.get_user_param('user_name') + ':' + aes.Ctr.decrypt(wsql.get_user_param('user_pwd'))))));
         if(suffix){
           headers.append('suffix', suffix);
         }
@@ -2762,7 +2771,7 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
             }
           })
           .catch(err => {
-            $p.msg.show_msg({
+            msg.show_msg({
               type: "alert-warning",
               text: err.message,
               title: "Сервис планирования"
@@ -2788,18 +2797,16 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
   }
   load_production(forse) {
     const prod = [];
-    const mgr = $p.cat.characteristics;
-    this.production.forEach((row) => {
-      const {nom, characteristic} = row;
+    const {characteristics} = $p.cat;
+    this.production.forEach(({nom, characteristic}) => {
       if(!characteristic.empty() && (forse || characteristic.is_new()) && !nom.is_procedure && !nom.is_accessory) {
         prod.push(characteristic.ref);
       }
     });
-    return mgr.adapter.load_array(mgr, prod)
+    return characteristics.adapter.load_array(characteristics, prod)
       .then(() => {
         prod.length = 0;
-        this.production.forEach((row) => {
-          const {nom, characteristic} = row;
+        this.production.forEach(({nom, characteristic}) => {
           if(!characteristic.empty() && !nom.is_procedure && !nom.is_accessory) {
             prod.push(characteristic);
           }
@@ -3013,10 +3020,10 @@ $p.DocCalc_order.FakeLenAngl = class FakeLenAngl {
   }
 };
 $p.DocCalc_orderProductionRow = class DocCalc_orderProductionRow extends $p.DocCalc_orderProductionRow {
-  value_change(field, type, value, no_extra_charge, rows) {
+  value_change(field, type, value, no_extra_charge) {
     let {_obj, _owner, nom, characteristic, unit} = this;
     let recalc;
-    const {rounding} = _owner._owner;
+    const {rounding, _slave_recalc} = _owner._owner;
     const rfield = $p.DocCalc_orderProductionRow.rfields[field];
     if(rfield) {
       _obj[field] = rfield === 'n' ? parseFloat(value) : '' + value;
@@ -3034,7 +3041,7 @@ $p.DocCalc_orderProductionRow = class DocCalc_orderProductionRow extends $p.DocC
       if(unit.owner != nom) {
         _obj.unit = nom.storage_unit.ref;
       }
-      if(!characteristic.origin.empty() && characteristic.origin.slave && (!rows || !rows.has(this))) {
+      if(!characteristic.origin.empty() && characteristic.origin.slave) {
         characteristic.specification.clear();
         characteristic.x = this.len;
         characteristic.y = this.width;
@@ -3116,14 +3123,14 @@ $p.DocCalc_orderProductionRow = class DocCalc_orderProductionRow extends $p.DocC
       delete amount.amount;
       Object.assign(doc, amount);
       doc._manager.emit_async('update', doc, amount);
-      if(!rows){
-        rows = new Set([this]);
+      if(!_slave_recalc){
+        _owner._owner._slave_recalc = true;
         _owner.forEach((row) => {
-          if(!rows.has(row) && !row.characteristic.origin.empty() && row.characteristic.origin.slave) {
-            row.value_change('quantity', 'update', row.quantity, no_extra_charge, rows);
-            rows.add(row);
+          if(row !== this && !row.characteristic.origin.empty() && row.characteristic.origin.slave) {
+            row.value_change('quantity', 'update', row.quantity, no_extra_charge);
           }
         });
+        _owner._owner._slave_recalc = false;
       }
       return false;
     }
@@ -3142,9 +3149,9 @@ return $p;
 };
 
 var cch_predefined_elmnts = function ($p) {
-  const {job_prm, adapters, cch, doc} = $p;
+  const {job_prm, adapters, doc, cch: {predefined_elmnts: _mgr}, utils, md} = $p;
   adapters.pouch.once('pouch_doc_ram_loaded', () => {
-    cch.predefined_elmnts.pouch_find_rows({_raw: true, _top: 500, _skip: 0})
+    _mgr.adapter.find_rows(_mgr, {_raw: true, _top: 500, _skip: 0})
       .then((rows) => {
         const parents = {};
         rows.forEach((row) => {
@@ -3201,22 +3208,22 @@ var cch_predefined_elmnts = function ($p) {
         });
       })
       .then(() => {
-        let prm = job_prm.properties.width;
-        const {calculated} = job_prm.properties;
-        if(prm && calculated.indexOf(prm) == -1) {
-          calculated.push(prm);
-          prm._calculated_value = {execute: (obj) => obj && obj.calc_order_row && obj.calc_order_row.width || 0};
-        }
-        prm = job_prm.properties.length;
-        if(prm && calculated.indexOf(prm) == -1) {
-          calculated.push(prm);
-          prm._calculated_value = {execute: (obj) => obj && obj.calc_order_row && obj.calc_order_row.len || 0};
+        const {properties} = job_prm;
+        if(properties) {
+          const {calculated, width, length} = properties;
+          if(width && calculated.indexOf(width) == -1) {
+            calculated.push(width);
+            width._calculated_value = {execute: (obj) => obj && obj.calc_order_row && obj.calc_order_row.width || 0};
+          }
+          if(length && calculated.indexOf(length) == -1) {
+            calculated.push(length);
+            length._calculated_value = {execute: (obj) => obj && obj.calc_order_row && obj.calc_order_row.len || 0};
+          }
         }
         doc.calc_order.load_templates && setTimeout(doc.calc_order.load_templates.bind(doc.calc_order), 1000);
-        setTimeout(() => $p.md.emit('predefined_elmnts_inited'), 100);
+        setTimeout(() => md.emit('predefined_elmnts_inited'), 100);
       });
   });
-  const _mgr = cch.predefined_elmnts;
   delete $p.CchPredefined_elmnts.prototype.value;
   $p.CchPredefined_elmnts.prototype.__define({
     value: {
@@ -3233,16 +3240,16 @@ var cch_predefined_elmnts = function ($p) {
           if(mf.digits && typeof res === 'number') {
             return res;
           }
-          if(mf.hasOwnProperty('str_len') && !$p.utils.is_guid(res)) {
+          if(mf.hasOwnProperty('str_len') && !utils.is_guid(res)) {
             return res;
           }
-          const mgr = $p.md.value_mgr(this._obj, 'value', mf);
+          const mgr = md.value_mgr(this._obj, 'value', mf);
           if(mgr) {
-            if($p.utils.is_data_mgr(mgr)) {
+            if(utils.is_data_mgr(mgr)) {
               return mgr.get(res, false);
             }
             else {
-              return $p.utils.fetch_type(res, mgr);
+              return utils.fetch_type(res, mgr);
             }
           }
           if(res) {
@@ -3251,13 +3258,13 @@ var cch_predefined_elmnts = function ($p) {
           }
         }
         else if(mf.date_part) {
-          return $p.utils.fix_date(this._obj.value, true);
+          return utils.fix_date(this._obj.value, true);
         }
         else if(mf.digits) {
-          return $p.utils.fix_number(this._obj.value, !mf.hasOwnProperty('str_len'));
+          return utils.fix_number(this._obj.value, !mf.hasOwnProperty('str_len'));
         }
         else if(mf.types[0] == 'boolean') {
-          return $p.utils.fix_boolean(this._obj.value);
+          return utils.fix_boolean(this._obj.value);
         }
         else {
           return this._obj.value || '';
@@ -6003,7 +6010,9 @@ class BuilderElement extends paper$1.Group {
         cnn3: cnn3,
         arc_h: arc_h,
         r: _xfields.r,
-        arc_ccw: _xfields.arc_ccw
+        arc_ccw: _xfields.arc_ccw,
+        a1: Object.assign({}, _xfields.x1, {synonym: "Угол1"}),
+        a2: Object.assign({}, _xfields.x1, {synonym: "Угол2"}),
       }
     };
   }
@@ -6091,12 +6100,12 @@ class BuilderElement extends paper$1.Group {
         obj: this,
         oxml: this.oxml
       });
-      this._attr._grid.attachEvent("onRowSelect", function(id){
-        if(["x1","y1","cnn1"].indexOf(id) != -1){
-          this._obj.select_node("b");
+      this._attr._grid.attachEvent('onRowSelect', function (id) {
+        if(['x1', 'y1', 'a1', 'cnn1'].indexOf(id) != -1) {
+          this._obj.select_node('b');
         }
-        else if(["x2","y2","cnn2"].indexOf(id) != -1){
-          this._obj.select_node("e");
+        else if(['x2', 'y2', 'a2', 'cnn2'].indexOf(id) != -1) {
+          this._obj.select_node('e');
         }
       });
     }
@@ -7615,6 +7624,38 @@ class ProfileItem extends GeneratrixElement {
       project.register_change();
     }
   }
+  angle_at(p) {
+    const {profile, point} = this.cnn_point(p);
+    if(!profile || !point) {
+      return 90;
+    }
+    const g1 = this.generatrix;
+    const g2 = profile.generatrix;
+    let offset1 = g1.getOffsetOf(g1.getNearestPoint(point)),
+      offset2 = g2.getOffsetOf(g2.getNearestPoint(point));
+    if(offset1 < 10){
+      offset1 = 10;
+    }
+    else if(Math.abs(offset1 - g1.length) < 10){
+      offset1 = g1.length - 10;
+    }
+    if(offset2 < 10){
+      offset2 = 10;
+    }
+    else if(Math.abs(offset2 - g2.length) < 10){
+      offset2 = g2.length - 10;
+    }
+    const t1 = g1.getTangentAt(offset1);
+    const t2 = g2.getTangentAt(offset2);
+    const a = t2.negate().getDirectedAngle(t1).round(1);
+    return a > 180 ? a - 180 : (a < 0 ? -a : a);
+  }
+  get a1() {
+    return this.angle_at('b');
+  }
+  get a2() {
+    return this.angle_at('e');
+  }
   get info() {
     return '№' + this.elm + ' α:' + this.angle_hor.toFixed(0) + '° l:' + this.length.toFixed(0);
   }
@@ -7724,8 +7765,8 @@ class ProfileItem extends GeneratrixElement {
         'inset',
         'clr'
       ],
-      'Начало': ['x1', 'y1', 'cnn1'],
-      'Конец': ['x2', 'y2', 'cnn2']
+      'Начало': ['x1','y1','a1','cnn1'],
+      'Конец': ['x2','y2','a2','cnn2']
     };
     if(this.selected_cnn_ii()) {
       oxml['Примыкание'] = ['cnn3'];
@@ -9774,7 +9815,7 @@ class Scheme extends paper$1.Project {
     const other = [];
     const layers = [];
     const profiles = new Set;
-    const {auto_align} = this;
+    const {auto_align, _dp} = this;
     for (const item of this.selectedItems) {
       const {parent, layer} = item;
       if(item instanceof paper$1.Path && parent instanceof GeneratrixElement && !profiles.has(parent)) {
@@ -9811,6 +9852,7 @@ class Scheme extends paper$1.Project {
       }
     }
     other.length && this.do_align(auto_align, profiles);
+    _dp._manager.emit_async('update', {}, {x1: true, x2: true, y1: true, y2: true, a1: true, a2: true, cnn1: true, cnn2: true, info: true});
   }
   save_coordinates(attr) {
     const {_attr, bounds, ox} = this;
