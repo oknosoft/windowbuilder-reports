@@ -2877,14 +2877,12 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
     }
     return ro;
   }
-  load_production(forse, all) {
+  load_production(forse) {
     const prod = [];
     const {characteristics} = $p.cat;
     this.production.forEach(({nom, characteristic}) => {
       if(!characteristic.empty() && (forse || characteristic.is_new())) {
-        if(all || (!nom.is_procedure && !nom.is_accessory)){
-          prod.push(characteristic.ref);
-        }
+        prod.push(characteristic.ref);
       }
     });
     return characteristics.adapter.load_array(characteristics, prod)
@@ -11620,7 +11618,7 @@ async function prod(ctx, next) {
   const {project, view} = new Editor();
   const {nom} = $p.cat;
   const calc_order = await $p.doc.calc_order.get(ctx.params.ref, 'promise');
-  const prod = await calc_order.load_production(true, true);
+  const prod = await calc_order.load_production(true);
   const res = {number_doc: calc_order.number_doc};
   const {query} = require('url').parse(ctx.req.url);
   if(query && query.indexOf('glasses') !== -1) {

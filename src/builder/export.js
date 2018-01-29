@@ -48,7 +48,7 @@ async function prod(ctx, next) {
   const {project, view} = new Editor();
   const {nom} = $p.cat;
   const calc_order = await $p.doc.calc_order.get(ctx.params.ref, 'promise');
-  const prod = await calc_order.load_production(true, true);
+  const prod = await calc_order.load_production(true);
   const res = {number_doc: calc_order.number_doc};
 
   const {query} = require('url').parse(ctx.req.url);
