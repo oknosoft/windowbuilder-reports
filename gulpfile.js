@@ -18,7 +18,7 @@ gulp.task('windowbuilder-lib', function(){
   return gulp.src([
     './src/builder/import.js',
     './src/geometry/*.js',
-    './src/modifiers/common/glob_products_building.js',
+    './src/modifiers/common/*.js',
     './src/builder/export.js',
   ])
     .pipe(concat('windowbuilder.js'))

@@ -1,5 +1,5 @@
 /*!
- windowbuilder-reports v2.0.237, built:2018-01-29
+ windowbuilder-reports v2.0.237, built:2018-02-28
  © 2014-2018 Evgeniy Malyarov and the Oknosoft team http://www.oknosoft.ru
  To obtain commercial license and technical support, contact info@oknosoft.ru
  */
@@ -124,6 +124,9 @@ var modifiers = function($p) {
 		}
 	});
 })($p.enm.elm_types);
+(function(_mgr){
+  _mgr.additions_groups = [_mgr.Подоконник, _mgr.Водоотлив, _mgr.МоскитнаяСетка, _mgr.Откос, _mgr.Профиль, _mgr.Монтаж, _mgr.Доставка, _mgr.Набор];
+})($p.enm.inserts_types);
 (function($p){
 	$p.enm.open_types.__define({
 		is_opening: {
@@ -235,7 +238,7 @@ $p.CatCharacteristics = class CatCharacteristics extends $p.CatCharacteristics {
     });
   }
   prod_name(short) {
-    const {calc_order_row, calc_order, leading_product, sys, clr} = this;
+    const {calc_order_row, calc_order, leading_product, sys, clr, origin} = this;
     let name = '';
     if(calc_order_row) {
       if(calc_order.number_internal) {
@@ -265,6 +268,9 @@ $p.CatCharacteristics = class CatCharacteristics extends $p.CatCharacteristics {
       }
       if(!sys.empty()) {
         name += '/' + sys.name;
+      }
+      else if(!origin.empty()) {
+        name += '/' + origin.name;
       }
       if(!short) {
         if(!clr.empty()) {
@@ -395,6 +401,56 @@ $p.CatCharacteristics = class CatCharacteristics extends $p.CatCharacteristics {
     }
     return this.owner;
   }
+  get builder_props() {
+    const defaults = $p.CatCharacteristics.builder_props_defaults;
+    let props;
+    try {
+      props = JSON.parse(this._obj.builder_props || '{}');
+    }
+    catch(e) {
+      props = {};
+    }
+    for(const prop in defaults){
+      if(!props.hasOwnProperty(prop)) {
+        props[prop] = defaults[prop];
+      }
+    }
+    return props;
+  }
+  set builder_props(v) {
+    const {_obj, _data} = this;
+    if(this.empty()) {
+      return;
+    }
+    const name = 'builder_props';
+    if(_data && _data._loading) {
+      _obj[name] = v;
+      return;
+    }
+    let _modified;
+    if(typeof _obj[name] !== 'string'){
+      _obj[name] = JSON.stringify($p.CatCharacteristics.builder_props_defaults);
+      _modified = true;
+    }
+    const props = JSON.parse(_obj[name]);
+    for(const prop in v){
+      if(props[prop] !== v[prop]) {
+        props[prop] = v[prop];
+        _modified = true;
+      }
+    }
+    if(_modified) {
+      _obj[name] = JSON.stringify(props);
+      this.__notify(name);
+    }
+  }
+};
+$p.CatCharacteristics.builder_props_defaults = {
+  auto_lines: true,
+  custom_lines: true,
+  cnns: true,
+  visualization: true,
+  txts: true
 };
 $p.CatCharacteristicsInsertsRow.prototype.value_change = function (field, type, value) {
   if(field == 'inset') {
@@ -432,7 +488,7 @@ $p.cat.characteristics.form_obj = function (pwnd, attr) {
     });
   };
   return this.constructor.prototype.form_obj.call(this, pwnd, attr)
-    .then(function (res) {
+    .then((res) => {
       if(res) {
         o = res.o;
         wnd = res.wnd;
@@ -1088,7 +1144,7 @@ Object.defineProperties($p.cat.divisions, {
     value: function (selection, val) {
       const list = [];
       $p.current_user.acl_objs.find_rows({type: "cat.divisions"}, ({acl_obj}) => {
-        if(list.indexOf(acl_obj) == -1){
+        if(acl_obj && list.indexOf(acl_obj) == -1){
           list.push(acl_obj);
           acl_obj._children().forEach((o) => list.indexOf(o) == -1 && list.push(o));
         }
@@ -1431,7 +1487,8 @@ $p.CatFurns = class CatFurns extends $p.CatFurns {
             return;
           }
           if(dop_row.is_set_row){
-            dop_row.nom.get_spec(contour, cache).each((sub_row) => {
+            const {nom} = dop_row;
+            nom && nom.get_spec(contour, cache).each((sub_row) => {
               if(sub_row.is_procedure_row){
                 res.add(sub_row);
               }
@@ -1446,7 +1503,8 @@ $p.CatFurns = class CatFurns extends $p.CatFurns {
         });
       }
       if(row_furn.is_set_row){
-        row_furn.nom.get_spec(contour, cache, exclude_dop).each((sub_row) => {
+        const {nom} = row_furn;
+        nom && nom.get_spec(contour, cache, exclude_dop).each((sub_row) => {
           if(sub_row.is_procedure_row){
             res.add(sub_row);
           }
@@ -1497,8 +1555,9 @@ $p.CatFurnsSpecificationRow = class CatFurnsSpecificationRow extends $p.CatFurns
         }
         else {
           const elm = contour.profile_by_furn_side(row.side, cache);
-          len = elm._row.len - 2 * elm.nom.sizefurn;
+          len = elm ? (elm._row.len - 2 * elm.nom.sizefurn) : 0;
         }
+        len = len.round(0);
         if (len < row.lmin || len > row.lmax) {
           return res = false;
         }
@@ -1507,10 +1566,10 @@ $p.CatFurnsSpecificationRow = class CatFurnsSpecificationRow extends $p.CatFurns
     return res;
   }
   get nom() {
-    return this._getter('nom')
+    return this._getter('nom') || this._getter('nom_set');
   }
-  set nom (v) {
-    if(v !== ""){
+  set nom(v) {
+    if(v !== '') {
       this._setter('nom', v);
     }
   }
@@ -1534,31 +1593,75 @@ $p.cat.inserts.__define({
 			$p.enm.inserts_types.Заполнение
 		]
 	},
+  _prms_by_type: {
+	  value: function (insert_type) {
+      const prms = new Set();
+      this.find_rows({available: true, insert_type}, (inset) => {
+        inset.used_params.forEach((param) => {
+          !param.is_calculated && prms.add(param);
+        });
+        inset.specification.forEach(({nom}) => {
+          const {used_params} = nom;
+          used_params && used_params.forEach((param) => {
+            !param.is_calculated && prms.add(param);
+          });
+        });
+      });
+      return prms;
+    }
+  },
   ItemData: {
     value: class ItemData {
       constructor(item, Renderer) {
         this.Renderer = Renderer;
         this.count = 0;
         class ItemRow extends $p.DpBuyers_orderProductionRow {
-        }
-        this.ProductionRow = ItemRow;
-        const prms = new Set();
-        $p.cat.inserts.find_rows({available: true, insert_type: item}, (inset) => {
-          inset.used_params.forEach((param) => {
-            !param.is_calculated && prms.add(param);
-          });
-          inset.specification.forEach(({nom}) => {
-            const {used_params} = nom;
-            used_params && used_params.forEach((param) => {
+          tune(ref, mf, column) {
+            const {inset} = this;
+            const prm = $p.cch.properties.get(ref);
+            if(mf.choice_params) {
+              const adel = new Set();
+              for(const choice of mf.choice_params) {
+                if(choice.name !== 'owner' && choice.path != prm) {
+                  adel.add(choice);
+                }
+              }
+              for(const choice of adel) {
+                mf.choice_params.splice(mf.choice_params.indexOf(choice), 1);
+              }
+            }
+            const prms = new Set();
+            inset.used_params.forEach((param) => {
               !param.is_calculated && prms.add(param);
             });
-          });
-        });
+            inset.specification.forEach(({nom}) => {
+              const {used_params} = nom;
+              used_params && used_params.forEach((param) => {
+                !param.is_calculated && prms.add(param);
+              });
+            });
+            mf.read_only = !prms.has(prm);
+            const links = prm.params_links({grid: {selection: {}}, obj: this});
+            const hide = links.some((link) => link.hide);
+            if(hide && !mf.read_only) {
+              mf.read_only = true;
+            }
+            if(links.length) {
+              const filter = {};
+              prm.filter_params_links(filter, null, links);
+              filter.ref && mf.choice_params.push({
+                name: 'ref',
+                path: filter.ref,
+              });
+            }
+          }
+        }
+        this.ProductionRow = ItemRow;
         const meta = $p.dp.buyers_order.metadata('production');
         this.meta = meta._clone();
         this.meta.fields.inset.choice_params[0].path = item;
         const changed = new Set();
-        for (const param of prms) {
+        for (const param of $p.cat.inserts._prms_by_type(item)) {
           $p.cat.scheme_settings.find_rows({obj: 'dp.buyers_order.production', name: item.name}, (scheme) => {
             if(!scheme.fields.find({field: param.ref})) {
               const row = scheme.fields.add({
@@ -1592,7 +1695,17 @@ $p.cat.inserts.__define({
           });
         }
         for(const scheme of changed) {
-          scheme.save();
+          const {doc} = $p.adapters.pouch.local;
+          if(doc.adapter === 'http' && !scheme.user) {
+            doc.getSession().then(({userCtx}) => {
+              if(userCtx.roles.indexOf('doc_full') !== -1) {
+                scheme.save();
+              }
+            });
+          }
+          else {
+            scheme.save();
+          }
         }
       }
     }
@@ -1891,18 +2004,23 @@ $p.CatInserts = class CatInserts extends $p.CatInserts {
             row_prm.is_linear = () => rib.profile ? rib.profile.is_linear() : true;
             if(this.check_restrictions(row_ins_spec, row_prm, true)){
               row_spec = new_spec_row({elm, row_base: row_ins_spec, origin, spec, ox});
-              if(!row_ins_spec.formula.empty()){
-                const qty = row_ins_spec.formula.execute({
-                  ox: ox,
-                  elm: rib.profile || rib,
-                  cnstr: len_angl && len_angl.cnstr || 0,
-                  inset: (len_angl && len_angl.hasOwnProperty('cnstr')) ? len_angl.origin : $p.utils.blank.guid,
-                  row_ins: row_ins_spec,
-                  row_spec: row_spec,
-                  len: rib.len
-                });
+              const qty = !row_ins_spec.formula.empty() && row_ins_spec.formula.execute({
+                ox: ox,
+                elm: rib.profile || rib,
+                cnstr: len_angl && len_angl.cnstr || 0,
+                inset: (len_angl && len_angl.hasOwnProperty('cnstr')) ? len_angl.origin : $p.utils.blank.guid,
+                row_ins: row_ins_spec,
+                row_spec: row_spec,
+                len: rib.len
+              });
+              if(qty) {
+                if(!row_spec.qty) {
+                  row_spec.qty = qty;
+                }
               }
-              calc_qty_len(row_spec, row_ins_spec, rib.len);
+              else {
+                calc_qty_len(row_spec, row_ins_spec, rib.len);
+              }
               calc_count_area_mass(row_spec, spec, _row, row_ins_spec.angle_calc_method);
             }
             row_spec = null;
@@ -1984,8 +2102,10 @@ $p.CatInserts = class CatInserts extends $p.CatInserts {
         _data.thickness = nom.thickness;
       }
       else{
-        this.specification.forEach((row) => {
-          _data.thickness += row.nom.thickness;
+        this.specification.forEach(({nom}) => {
+          if(nom) {
+            _data.thickness += nom.thickness;
+          }
         });
       }
     }
@@ -2361,57 +2481,6 @@ $p.CatProduction_params.prototype.__define({
 		}
 	}
 });
-(function (_mgr) {
-  _mgr.metadata().tabular_sections.production.fields.characteristic._option_list_local = true;
-  _mgr._destinations_condition = {predefined_name: {in: ['Документ_Расчет', 'Документ_ЗаказПокупателя']}};
-  _mgr.build_search = function (tmp, obj) {
-    const {number_internal, client_of_dealer, partner, note} = obj;
-    tmp.search = (obj.number_doc +
-      (number_internal ? ' ' + number_internal : '') +
-      (client_of_dealer ? ' ' + client_of_dealer : '') +
-      (partner.name ? ' ' + partner.name : '') +
-      (note ? ' ' + note : '')).toLowerCase();
-  };
-  _mgr.load_templates = async function () {
-    if(!$p.job_prm.builder) {
-      $p.job_prm.builder = {};
-    }
-    if(!$p.job_prm.builder.base_block) {
-      $p.job_prm.builder.base_block = [];
-    }
-    if(!$p.job_prm.pricing) {
-      $p.job_prm.pricing = {};
-    }
-    const {base_block} = $p.job_prm.builder;
-    $p.cat.production_params.forEach((o) => {
-      if(!o.is_folder) {
-        o.base_blocks.forEach((row) => {
-          if(base_block.indexOf(row.calc_order) == -1) {
-            base_block.push(row.calc_order);
-          }
-        });
-      }
-    });
-    const refs = [];
-    for (let o of base_block) {
-      refs.push(o.ref);
-      if(refs.length > 9) {
-        await _mgr.adapter.load_array(_mgr, refs);
-        refs.length = 0;
-      }
-    }
-    if(refs.length) {
-      await _mgr.adapter.load_array(_mgr, refs);
-    }
-    refs.length = 0;
-    base_block.forEach(({production}) => {
-      if(production.count()) {
-        refs.push(production.get(0).characteristic.ref);
-      }
-    });
-    return $p.cat.characteristics.adapter.load_array($p.cat.characteristics, refs);
-  };
-})($p.doc.calc_order);
 $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
   after_create() {
     const {enm, cat, current_user, DocCalc_order} = $p;
@@ -2494,7 +2563,8 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
     else {
       _obj.state = 'draft';
     }
-    this._manager.pouch_db.query('svgs', {startkey: [this.ref, 0], endkey: [this.ref, 10e9]})
+    const rows_saver = this.product_rows(true);
+    const res = this._manager.pouch_db.query('svgs', {startkey: [this.ref, 0], endkey: [this.ref, 10e9]})
       .then(({rows}) => {
         const deleted = [];
         for (const {id} of rows) {
@@ -2511,9 +2581,15 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
         res.length && this._manager.emit_async('svgs', this);
       })
       .catch((err) => null);
+    if(this._data.before_save_sync) {
+      return res
+        .then(() => rows_saver)
+        .then(() => this);
+    }
   }
   value_change(field, type, value) {
     if(field == 'organization') {
+      this.organization = value;
       this.new_number_doc();
       if(this.contract.organization != value) {
         this.contract = $p.cat.contracts.by_partner_and_org(this.partner, value);
@@ -2523,6 +2599,10 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
       this.contract = $p.cat.contracts.by_partner_and_org(value, this.organization);
     }
     this._manager.emit_add_fields(this, ['contract']);
+  }
+  after_del_row(name) {
+    name === 'production' && this.product_rows();
+    return this;
   }
   get doc_currency() {
     const currency = this.contract.settlements_currency;
@@ -2548,6 +2628,27 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
     this._setter('contract', v);
     this.vat_consider = this.contract.vat_consider;
     this.vat_included = this.contract.vat_included;
+  }
+  product_rows(save) {
+    const res = [];
+    this.production.forEach(({row, characteristic}) => {
+      if(!characteristic.empty() && characteristic.calc_order === this) {
+        if(characteristic.product !== row || characteristic.partner !== this.partner || characteristic._modified) {
+          characteristic.product = row;
+          if(!characteristic.owner.empty()) {
+            if(save) {
+              res.push(characteristic.save());
+            }
+            else {
+              characteristic.name = characteristic.prod_name();
+            }
+          }
+        }
+      }
+    });
+    if(save) {
+      return Promise.all(res);
+    }
   }
   dispatching_totals() {
     var options = {
@@ -2594,8 +2695,6 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
       ДоговорНомер: contract.number_doc ? contract.number_doc : this.number_doc,
       ДоговорСрокДействия: moment(contract.validity).format('L'),
       ЗаказНомер: this.number_doc,
-      Примечание: this.note,
-      НомерВнутренний: this.number_internal,
       Контрагент: partner.presentation,
       КонтрагентОписание: partner.long_presentation,
       КонтрагентДокумент: '',
@@ -2656,6 +2755,7 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
       ОрганизацияСвидетельствоНаименованиеОргана: organization.certificate_authority_name,
       ОрганизацияСвидетельствоСерияНомер: organization.certificate_series_number,
       ОрганизацияЮрФизЛицо: organization.individual_legal.presentation,
+      Офис: this.department.presentation,
       ПродукцияЭскизы: {},
       Проект: this.project.presentation,
       СистемыПрофилей: this.sys_profile,
@@ -2672,8 +2772,8 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
       СотрудникФамилия: individual_person.Фамилия,
       СотрудникФамилияРП: individual_person.ФамилияРП,
       СотрудникФИО: individual_person.Фамилия +
-      (individual_person.Имя ? ' ' + individual_person.Имя[1].toUpperCase() + '.' : '' ) +
-      (individual_person.Отчество ? ' ' + individual_person.Отчество[1].toUpperCase() + '.' : ''),
+      (individual_person.Имя ? ' ' + individual_person.Имя[0].toUpperCase() + '.' : '' ) +
+      (individual_person.Отчество ? ' ' + individual_person.Отчество[0].toUpperCase() + '.' : ''),
       СотрудникФИОРП: individual_person.ФамилияРП + ' ' + individual_person.ИмяРП + ' ' + individual_person.ОтчествоРП,
       СуммаДокумента: this.doc_amount.toFixed(2),
       СуммаДокументаПрописью: this.doc_amount.in_words(),
@@ -2711,46 +2811,53 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
         break;
       }
     }
-    this.production.forEach((row) => {
-      if(!row.characteristic.empty() && !row.nom.is_procedure && !row.nom.is_service && !row.nom.is_accessory) {
-        res.Продукция.push(this.row_description(row));
-        res.ВсегоИзделий += row.quantity;
-        res.ВсегоПлощадьИзделий += row.quantity * row.s;
-        if(attr.sizes === false) {
+    return this.load_production().then(() => {
+      this.production.forEach((row) => {
+        if(!row.characteristic.empty() && !row.nom.is_procedure && !row.nom.is_service && !row.nom.is_accessory) {
+          res.Продукция.push(this.row_description(row));
+          res.ВсегоИзделий += row.quantity;
+          res.ВсегоПлощадьИзделий += row.quantity * row.s;
+          if(attr.sizes === false) {
+          }
+          else {
+            if($p.job_prm.use_svgs) {
+              get_imgs.push(characteristics.get_attachment(row.characteristic.ref, 'svg')
+                .then(blob_as_text)
+                .then((svg_text) => res.ПродукцияЭскизы[row.characteristic.ref] = svg_text)
+                .catch((err) => err && err.status != 404 && $p.record_log(err))
+              );
+            }
+            else if(row.characteristic.svg) {
+              res.ПродукцияЭскизы[row.characteristic.ref] = row.characteristic.svg;
+            }
+          }
         }
-        else {
-          get_imgs.push(characteristics.get_attachment(row.characteristic.ref, 'svg')
-            .then(blob_as_text)
-            .then((svg_text) => res.ПродукцияЭскизы[row.characteristic.ref] = svg_text)
-            .catch((err) => err && err.status != 404 && $p.record_log(err))
-          );
+        else if(!row.nom.is_procedure && !row.nom.is_service && row.nom.is_accessory) {
+          res.Аксессуары.push(this.row_description(row));
         }
-      }
-      else if(!row.nom.is_procedure && !row.nom.is_service && row.nom.is_accessory) {
-        res.Аксессуары.push(this.row_description(row));
-      }
-      else if(!row.nom.is_procedure && row.nom.is_service && !row.nom.is_accessory) {
-        res.Услуги.push(this.row_description(row));
-      }
-    });
-    res.ВсегоПлощадьИзделий = res.ВсегоПлощадьИзделий.round(3);
-    return (get_imgs.length ? Promise.all(get_imgs) : Promise.resolve([]))
-      .then(() => $p.load_script('/dist/qrcodejs/qrcode.min.js', 'script'))
-      .then(() => {
-        const svg = document.createElement('SVG');
-        svg.innerHTML = '<g />';
-        const qrcode = new QRCode(svg, {
-          text: 'http://www.oknosoft.ru/zd/',
-          width: 100,
-          height: 100,
-          colorDark: '#000000',
-          colorLight: '#ffffff',
-          correctLevel: QRCode.CorrectLevel.H,
-          useSVG: true
-        });
-        res.qrcode = svg.innerHTML;
-        return res;
+        else if(!row.nom.is_procedure && row.nom.is_service && !row.nom.is_accessory) {
+          res.Услуги.push(this.row_description(row));
+        }
       });
+      res.ВсегоПлощадьИзделий = res.ВсегоПлощадьИзделий.round(3);
+      return (get_imgs.length ? Promise.all(get_imgs) : Promise.resolve([]))
+        .then(() => $p.load_script('/dist/qrcodejs/qrcode.min.js', 'script'))
+        .then(() => {
+          const svg = document.createElement('SVG');
+          svg.innerHTML = '<g />';
+          const qrcode = new QRCode(svg, {
+            text: 'http://www.oknosoft.ru/zd/',
+            width: 100,
+            height: 100,
+            colorDark: '#000000',
+            colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.H,
+            useSVG: true
+          });
+          res.qrcode = svg.innerHTML;
+          return res;
+        });
+    });
   }
   row_description(row) {
     if(!(row instanceof $p.DocCalc_orderProductionRow) && row.characteristic) {
@@ -2947,10 +3054,7 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
       cx = Promise.resolve(ox);
       return false;
     }
-    if(row.characteristic.empty()){
-      mgr.find_rows({calc_order: this, product: row.row}, fill_cx);
-    }
-    else if(!row.characteristic._deleted){
+    if(!row.characteristic.empty() && !row.characteristic._deleted){
       fill_cx(row.characteristic);
     }
     return (cx || mgr.create({
@@ -3310,7 +3414,10 @@ var cch_predefined_elmnts = function ($p) {
           }
         }
         doc.calc_order.load_templates && setTimeout(doc.calc_order.load_templates.bind(doc.calc_order), 1000);
-        setTimeout(() => md.emit('predefined_elmnts_inited'), 100);
+        setTimeout(() => $p.adapters.pouch.local.doc.get('_design/svgs')
+          .then(() => $p.job_prm.use_svgs = true)
+          .catch(() => $p.job_prm.use_svgs = false)
+          .then(() => md.emit('predefined_elmnts_inited')), 100);
       });
   });
   delete $p.CchPredefined_elmnts.prototype.value;
@@ -3499,7 +3606,7 @@ var cch_properties = function ($p) {
           try {
             const arr = JSON.parse(txt_row);
             const {types} = this.type;
-            if(types.length == 1) {
+            if(types && types.length == 1) {
               const mgr = $p.md.mgr_by_class_name(types[0]);
               return arr.map((ref) => mgr.get(ref, false));
             }
@@ -3565,8 +3672,11 @@ var cch_properties = function ($p) {
       }
     },
     filter_params_links: {
-      value: function (filter, attr) {
-        this.params_links(attr).forEach((link) => {
+      value: function (filter, attr, links) {
+        if(!links) {
+          links = this.params_links(attr);
+        }
+        links.forEach((link) => {
           if(!filter.ref) {
             filter.ref = {in: []};
           }
@@ -3629,6 +3739,13 @@ var i18ru = function ($p) {
     ruler_base: 'По опорным линиям',
     ruler_inner: 'По внутренним линиям',
     ruler_outer: 'По внешним линиям',
+    show_not_implemented: function () {
+      this.show_msg({
+        type: 'alert-warning',
+        text: this.not_implemented,
+        title: this.main_title
+      });
+    },
   });
 };
 
@@ -3739,7 +3856,7 @@ const MetaEngine = metaCore.plugin(metaPouchdb);
 const settings = require('./config/report.settings');
 const meta_init = require('./server/metadata/init.js');
 debug$2('required');
-const $p = new MetaEngine();
+const $p = global.$p = new MetaEngine();
 debug$2('created');
 $p.wsql.init(settings);
 dhtmlx_eve($p);
@@ -4166,17 +4283,6 @@ class Contour extends AbstractFilling(paper$1.Layer) {
           segments.splice(ind, 1);
         }
       });
-    }
-    for(const gl of res) {
-      const remove = [];
-      for(const segm of gl) {
-        if(segm.b.is_nearest(segm.e, true)){
-          remove.push(segm);
-        }
-      }
-      for(const segm of remove) {
-        gl.splice(gl.indexOf(segm), 1);
-      }
     }
     return res;
   }
@@ -5172,11 +5278,11 @@ class Contour extends AbstractFilling(paper$1.Layer) {
     this.sectionals.forEach((elm) => elm.redraw());
     this.notify(this, 'contour_redrawed', this._attr._bounds);
   }
-  refresh_prm_links() {
+  refresh_prm_links(root) {
     const {cnstr} = this;
     let notify;
     this.params.find_rows({
-      cnstr: cnstr || -9999,
+      cnstr: root ? 0 : cnstr || -9999,
       inset: $p.utils.blank.guid,
       hide: {not: true},
     }, (prow) => {
@@ -5307,9 +5413,10 @@ class Contour extends AbstractFilling(paper$1.Layer) {
       if (set_handle_height(row)) {
         return false;
       }
-      if (row.is_set_row) {
+      const {nom} = row;
+      if (nom && row.is_set_row) {
         let ok = false;
-        row.nom.get_spec(this, cache, true).each((sub_row) => {
+        nom.get_spec(this, cache, true).each((sub_row) => {
           if (set_handle_height(sub_row)) {
             return !(ok = true);
           }
@@ -6327,11 +6434,13 @@ class BuilderElement extends paper$1.Group {
     }
   }
   set_clr(v, ignore_select) {
-    this._row.clr = v;
+    if(this._row.clr != v) {
+      this._row.clr = v;
+      this.project.register_change();
+    }
     if(this.path instanceof paper$1.Path){
       this.path.fillColor = BuilderElement.clr_by_clr.call(this, this._row.clr, false);
     }
-    this.project.register_change();
   }
   t_parent(be) {
     return this;
@@ -6687,8 +6796,18 @@ class Filling extends AbstractFilling(BuilderElement) {
       const {project, elm, clr} = this;
       const {glass_specification} = project.ox;
       const proto = glass_specification.find_rows({elm});
-      if(!inset.clr_group.empty() && inset.clr_group.clr_conformity.count() && !inset.clr_group.clr_conformity._obj.some((row) => row.clr1 == clr)) {
-        this.clr = inset.clr_group.clr_conformity.get(0).clr1;
+      if(!inset.clr_group.empty() && inset.clr_group.clr_conformity.count() &&
+          !inset.clr_group.clr_conformity._obj.some((row) => row.clr1 == clr || row.clr1 == clr.parent)) {
+        const {clr1} = inset.clr_group.clr_conformity.get(0);
+        if(clr1.is_folder) {
+          $p.cat.clrs.find_rows({parent: clr1}, (v) => {
+            this.clr = v;
+            return false;
+          });
+        }
+        else {
+          this.clr = clr1;
+        }
       }
       if(proto.length) {
         glass_specification.clear({elm});
@@ -6786,7 +6905,7 @@ class Filling extends AbstractFilling(BuilderElement) {
       path.addSegments(attr.segments);
     }
     else if(Array.isArray(attr)){
-      const {length} = attr;
+      let {length} = attr;
       const {connections} = this.project;
       let prev, curr, next, sub_path;
       for(let i=0; i<length; i++ ){
@@ -6798,7 +6917,7 @@ class Filling extends AbstractFilling(BuilderElement) {
         curr.sub_path = sub_path.equidistant(
           (sub_path._reversed ? -curr.profile.d1 : curr.profile.d2) + (curr.cnn ? curr.cnn.sz : 20), consts.sticking);
       }
-      for(let i=0; i<length; i++ ){
+      for (let i = 0; i < length; i++) {
         prev = i === 0 ? attr[length-1] : attr[i-1];
         curr = attr[i];
         next = i === length-1 ? attr[0] : attr[i+1];
@@ -6814,7 +6933,25 @@ class Filling extends AbstractFilling(BuilderElement) {
         }
         curr.sub_path = curr.sub_path.get_subpath(curr.pb, curr.pe);
       }
-      for(let i=0; i<length; i++ ){
+      const remove = [];
+      for (let i = 0; i < length; i++) {
+        prev = i === 0 ? attr[length-1] : attr[i-1];
+        next = i === length-1 ? attr[0] : attr[i+1];
+        const crossings =  prev.sub_path.getCrossings(next.sub_path);
+        if(crossings.length){
+          if((prev.e.getDistance(crossings[0].point) < prev.profile.width * 2) ||  (next.b.getDistance(crossings[0].point) < next.profile.width * 2)) {
+            remove.push(attr[i]);
+            prev.sub_path.splitAt(crossings[0]);
+            const nloc = next.sub_path.getLocationOf(crossings[0].point);
+            next.sub_path = next.sub_path.splitAt(nloc);
+          }
+        }
+      }
+      for(const segm of remove) {
+        attr.splice(attr.indexOf(segm), 1);
+        length--;
+      }
+      for (let i = 0; i < length; i++) {
         curr = attr[i];
         path.addSegments(curr.sub_path.segments);
         ["anext","pb","pe"].forEach((prop) => { delete curr[prop]; });
@@ -7284,6 +7421,130 @@ class GeneratrixElement extends BuilderElement {
       mpoint = ppath.intersect_point(gen, mpoint, true);
       this[node] = mpoint;
       return true;
+    }
+  }
+}
+class Magnetism {
+  constructor(scheme) {
+    this.scheme = scheme;
+  }
+  get selected() {
+    const {profiles} = this.scheme.activeLayer;
+    const selected = {profiles};
+    for(const {generatrix} of profiles) {
+      if(generatrix.firstSegment.selected) {
+        if(selected.profile) {
+          selected.break = true;
+          break;
+        }
+        selected.profile = generatrix.parent;
+        selected.point = 'b';
+      }
+      if(generatrix.lastSegment.selected) {
+        if(selected.profile) {
+          selected.break = true;
+          break;
+        }
+        selected.profile = generatrix.parent;
+        selected.point = 'e';
+      }
+    }
+    return selected;
+  }
+  filter(selected) {
+    const point = selected.profile[selected.point];
+    const nodes = [selected];
+    for(const profile of selected.profiles) {
+      if(profile !== selected.profile) {
+        if(profile.b.is_nearest(point, true)) {
+          nodes.push({profile, point: 'b'});
+        }
+        if(profile.e.is_nearest(point, true)) {
+          nodes.push({profile, point: 'e'});
+        }
+        const px = (profile.nearest(true) ? profile.rays.outer : profile.generatrix).getNearestPoint(point);
+        if(px.is_nearest(point, true)) {
+          nodes.push({profile, point: 't'});
+        }
+      }
+    }
+    return nodes;
+  }
+  short_glass(point) {
+    for(const glass of this.scheme.activeLayer.glasses(false, true)){
+      for(const segm of glass.outer_profiles) {
+        if((segm.b.is_nearest(point) || segm.e.is_nearest(point)) &&
+          segm.sub_path && segm.sub_path.length < consts.sticking) {
+          return {segm, glass};
+        }
+      }
+    }
+  }
+  m1() {
+    const {tb_left} = this.scheme._scope;
+    const previous = tb_left && tb_left.get_selected();
+    Promise.resolve().then(() => {
+      const {selected} = this;
+      if(selected.break) {
+        $p.msg.show_msg({
+          type: 'alert-info',
+          text: `Выделено более одного узла`,
+          title: 'Магнит 0-штапик'
+        });
+      }
+      else if(!selected.profile) {
+        $p.msg.show_msg({
+          type: 'alert-info',
+          text: `Не выделено ни одного узла профиля`,
+          title: 'Магнит 0-штапик'
+        });
+      }
+      else {
+        const spoint = selected.profile[selected.point];
+        const res = this.short_glass(spoint);
+        if(res) {
+          const {segm, glass} = res;
+          const {Штапик} = $p.enm.elm_types;
+          let cl, negate;
+          this.scheme.ox.cnn_elmnts.find_rows({elm1: glass.elm, elm2: segm.profile.elm}, (row) => {
+            cl = row.aperture_len;
+          });
+          if(!cl) {
+            $p.msg.show_msg({
+              type: 'alert-info',
+              text: `Не найдена строка соединения короткого ребра с профилем`,
+              title: 'Магнит 0-штапик'
+            });
+          }
+          else {
+            const cnn = selected.profile.cnn_point(selected.point);
+            const {profile} = cnn;
+            const point = profile.generatrix.getNearestPoint(spoint);
+            const offset = profile.generatrix.getOffsetOf(point);
+            let tangent = profile.generatrix.getTangentAt(offset);
+            if(Math.abs(segm.sub_path.getTangentAt(0).angle - tangent.angle) < 90) {
+              negate = !negate;
+            }
+            if(segm.b.getDistance(spoint) > segm.e.getDistance(spoint)) {
+              negate = !negate;
+            }
+            if(!negate) {
+              tangent = tangent.negate();
+            }
+            selected.profile.move_points(tangent.multiply(cl));
+          }
+        }
+        else {
+          $p.msg.show_msg({
+            type: 'alert-info',
+            text: `Не найдено коротких сегментов заполнений<br />в окрестности выделенной точки`,
+            title: 'Магнит 0-штапик'
+          });
+        }
+      }
+    });
+    if(previous) {
+      return this.scheme._scope.select_tool(previous.replace('left_', ''));
     }
   }
 }
@@ -8385,9 +8646,9 @@ class ProfileItem extends GeneratrixElement {
             _rays.b.cnn = null;
           }
         }
-        const imposts = this.joined_imposts();
+        const {inner, outer} = this.joined_imposts();
         const elm2 = this.elm;
-        for (const {profile} of imposts.inner.concat(imposts.outer)) {
+        for (const {profile} of inner.concat(outer)) {
           const {b, e} = profile.rays;
           b.profile == this && b.clear(true);
           e.profile == this && e.clear(true);
@@ -8491,7 +8752,7 @@ class ProfileItem extends GeneratrixElement {
       !cnn_point.profile.path.segments.length && cnn_point.profile.redraw();
       const nodes = new Set();
       let profile2;
-      cnn_point.point && this.layer.profiles.forEach((profile) => {
+      cnn_point.point && !(this instanceof Onlay) && this.layer.profiles.forEach((profile) => {
         if(profile !== this){
           if(cnn_point.point.is_nearest(profile.b, true)) {
             const cp = profile.cnn_point('b').profile;
@@ -8943,7 +9204,14 @@ class Profile extends ProfileItem {
       if(!(elm instanceof Profile || elm instanceof ProfileConnective) || !elm.isInserted()) {
         return;
       }
-      const {generatrix} = elm;
+      let {generatrix} = elm;
+      if(elm.elm_type === $p.enm.elm_types.Импост) {
+        const pb = elm.cnn_point('b').profile;
+        const pe = elm.cnn_point('e').profile;
+        if(pb && pb.nearest(true) || pe && pe.nearest(true)) {
+          generatrix = generatrix.clone({insert: false}).elongation(90);
+        }
+      }
       let is_nearest = [];
       if(generatrix.is_nearest(b)) {
         is_nearest.push(b);
@@ -9426,17 +9694,23 @@ class ProfileConnective extends ProfileItem {
     _row.elm_type = this.elm_type;
   }
   remove() {
-    this.joined_nearests().forEach((np) => {
-      const {_attr} = np;
-      if(_attr._rays){
-        _attr._rays.clear();
+    this.joined_nearests().forEach((rama) => {
+      const {inner, outer} = rama.joined_imposts();
+      for (const {profile} of inner.concat(outer)) {
+        profile.rays.clear();
       }
+      for (const {_attr, elm} of rama.joined_nearests()) {
+        _attr._rays && _attr._rays.clear();
+      }
+      const {_attr, layer} = rama;
+      _attr._rays && _attr._rays.clear();
       if(_attr._nearest){
         _attr._nearest = null;
       }
       if(_attr._nearest_cnn){
         _attr._nearest_cnn = null;
       }
+      layer && layer.notify && layer.notify({profiles: [rama], points: []}, consts.move_points);
     });
     super.remove();
   }
@@ -9814,22 +10088,25 @@ class Scheme extends paper$1.Project {
         return res;
       }
     };
+    this.magnetism = new Magnetism(this);
     this.redraw = () => {
       _attr._opened && typeof requestAnimationFrame == 'function' && requestAnimationFrame(_scheme.redraw);
       if(!_attr._opened || _attr._saving || !_changes.length) {
         return;
       }
       _changes.length = 0;
-      if(_scheme.contours.length) {
+      const {contours} = _scheme;
+      if(contours.length) {
         _scheme.l_connective.redraw();
-        for (let contour of _scheme.contours) {
+        contours[0].refresh_prm_links(true);
+        for (let contour of contours) {
           contour.redraw();
           if(_changes.length && typeof requestAnimationFrame == 'function') {
             return;
           }
         }
         _attr._bounds = null;
-        _scheme.contours.forEach((l) => {
+        contours.forEach((l) => {
           l.contours.forEach((l) => {
             l.save_coordinates(true);
             l.refresh_prm_links();
@@ -10239,7 +10516,7 @@ class Scheme extends paper$1.Project {
       ox._mixin(is_snapshot ? obx :
         obx._obj, null, ['ref', 'name', 'calc_order', 'product', 'leading_product', 'leading_elm', 'origin', 'base_block', 'note', 'partner'], true);
       if(!is_snapshot) {
-        ox.base_block = obx.base_block.empty() ? obx : obx.base_block;
+        ox.base_block = (obx.base_block.empty() || obx.base_block.calc_order.obj_delivery_state === $p.enm.obj_delivery_states.Шаблон) ? obx : obx.base_block;
       }
       this.load(ox);
       ox._data._modified = true;
@@ -10275,7 +10552,7 @@ class Scheme extends paper$1.Project {
     }
     const layers = new Set();
     for (const profile of profiles) {
-      layers.add(profile.layer);
+      profile.layer.fillings && layers.add(profile.layer);
     }
     if(this._attr._align_timer) {
       clearTimeout(this._attr._align_timer);
@@ -10975,6 +11252,502 @@ const consts = new function Settings(){
 	this.move_handle = 'move_handle';
 	this.move_shapes = 'move-shapes';
 };
+class Pricing {
+  constructor($p$$1) {
+    $p$$1.md.once("predefined_elmnts_inited", () => {
+      this.by_local()
+        .then((loc) => {
+          return !loc && this.by_range();
+        })
+        .then(() => {
+          $p$$1.adapters.pouch.emit('pouch_complete_loaded');
+          $p$$1.doc.nom_prices_setup.pouch_db.changes({
+            since: 'now',
+            live: true,
+            include_docs: true,
+            selector: {class_name: {$in: ['doc.nom_prices_setup', 'cat.formulas']}}
+          }).on('change', (change) => {
+            if(change.doc.class_name == 'doc.nom_prices_setup'){
+              setTimeout(() => {
+                this.by_doc(change.doc);
+              }, 1000);
+            }
+          });
+        });
+    });
+  }
+  build_cache(rows) {
+    const {nom, currencies} = $p.cat;
+    const note = 'Индекс цен номенклатуры';
+    for(const {key, value} of rows){
+      if(!Array.isArray(value)){
+        return setTimeout(() => $p.iface.do_reload('', note), 1000);
+      }
+      const onom = nom.get(key[0], false, true);
+      if (!onom || !onom._data){
+        $p.record_log({
+          class: 'error',
+          nom: key[0],
+          note,
+          value
+        });
+        continue;
+      }
+      if (!onom._data._price){
+        onom._data._price = {};
+      }
+      const {_price} = onom._data;
+      if (!_price[key[1]]){
+        _price[key[1]] = {};
+      }
+      _price[key[1]][key[2]] = value.map((v) => ({
+        date: new Date(v.date),
+        currency: currencies.get(v.currency),
+        price: v.price
+      }));
+    }
+  }
+  build_cache_local(prices) {
+    const {nom, currencies} = $p.cat;
+    const note = 'Индекс цен номенклатуры';
+    const date = new Date('2010-01-01');
+    for(const ref in prices) {
+      if(ref[0] === '_' || ref === 'remote_rev') {
+        continue;
+      }
+      const onom = nom.get(ref, false, true);
+      const value = prices[ref];
+      if (!onom || !onom._data){
+        $p.record_log({
+          class: 'error',
+          nom: ref,
+          note,
+          value
+        });
+        continue;
+      }
+      onom._data._price = value;
+      for(const cref in value){
+        for(const pref in value[cref]) {
+          const price = value[cref][pref][0];
+          price.date = date;
+          price.currency = currencies.get(price.currency);
+        }
+      }
+    }
+  }
+  sync_local(pouch, step = 0) {
+    return pouch.remote.doc.get(`_local/price_${step}`)
+      .then((remote) => {
+        return pouch.local.doc.get(`_local/price_${step}`)
+          .then((local) => local.remote_rev)
+          .catch(() => null)
+          .then((rev) => {
+            this.build_cache_local(remote);
+            if(rev !== remote._rev) {
+              remote.remote_rev = remote._rev;
+              if(!rev) {
+                delete remote._rev;
+              }
+              pouch.local.doc.put(remote);
+            }
+            return this.sync_local(pouch, ++step);
+          })
+      })
+      .catch((err) => {
+        if(step !== 0) {
+          pouch.local.doc.get(`_local/price_${step}`)
+            .then((local) => pouch.local.doc.remove(local))
+            .catch(() => null);
+          return true;
+        }
+      });
+  }
+  by_local(step = 0) {
+    const {pouch} = $p.adapters;
+    const pre = step === 0 && pouch.local.doc.adapter !== 'http' && $p.adapters.pouch.authorized ?
+      pouch.remote.doc.info()
+        .then(() => this.sync_local(pouch))
+        .catch((err) => null)
+      :
+      Promise.resolve();
+    return pre.then((loaded) => {
+      if(loaded) {
+        return loaded;
+      }
+      else {
+        return pouch.local.doc.get(`_local/price_${step}`)
+      }
+    })
+      .then((prices) => {
+        if(prices === true) {
+          return prices;
+        }
+        this.build_cache_local(prices);
+        pouch.emit('nom_prices', ++step);
+        return this.by_local(step);
+      })
+      .catch((err) => {
+        return step !== 0;
+      });
+  }
+  by_range(startkey, step = 0) {
+    return $p.doc.nom_prices_setup.pouch_db.query('doc/doc_nom_prices_setup_slice_last',
+      {
+        limit: 600,
+        include_docs: false,
+        startkey: startkey || [''],
+        endkey: ['\ufff0'],
+        reduce: true,
+        group: true,
+      })
+      .then((res) => {
+        this.build_cache(res.rows);
+        $p.adapters.pouch.emit('nom_prices', ++step);
+        if (res.rows.length === 600) {
+          return this.by_range(res.rows[res.rows.length - 1].key, step);
+        }
+      })
+      .catch((err) => {
+        $p.record_log(err);
+      });
+  }
+  by_doc(doc) {
+    const keys = doc.goods.map(({nom, nom_characteristic, price_type}) => [nom, nom_characteristic, price_type]);
+    return $p.doc.nom_prices_setup.pouch_db.query("doc/doc_nom_prices_setup_slice_last",
+      {
+        include_docs: false,
+        keys: keys,
+        reduce: true,
+        group: true,
+      })
+      .then((res) => {
+        this.build_cache(res.rows);
+      });
+  }
+  nom_price(nom, characteristic, price_type, prm, row) {
+    if (row && prm) {
+      const {_owner} = prm.calc_order_row._owner,
+        price_prm = {
+          price_type: price_type,
+          characteristic: characteristic,
+          date: _owner.date,
+          currency: _owner.doc_currency
+        };
+      if (price_type == prm.price_type.price_type_first_cost && !prm.price_type.formula.empty()) {
+        price_prm.formula = prm.price_type.formula;
+      }
+      else if(price_type == prm.price_type.price_type_sale && !prm.price_type.sale_formula.empty()){
+        price_prm.formula = prm.price_type.sale_formula;
+      }
+      if(!characteristic.clr.empty()){
+        price_prm.clr = characteristic.clr;
+      }
+      row.price = nom._price(price_prm);
+      return row.price;
+    }
+  }
+  price_type(prm) {
+    const {utils, job_prm, enm, ireg, cat} = $p;
+    const empty_formula = cat.formulas.get();
+    prm.price_type = {
+      marginality: 1.9,
+      marginality_min: 1.2,
+      marginality_internal: 1.5,
+      discount: 0,
+      discount_external: 10,
+      extra_charge_external: 0,
+      price_type_first_cost: job_prm.pricing.price_type_first_cost,
+      price_type_sale: job_prm.pricing.price_type_sale,
+      price_type_internal: job_prm.pricing.price_type_first_cost,
+      formula: empty_formula,
+      sale_formula: empty_formula,
+      internal_formula: empty_formula,
+      external_formula: empty_formula
+    };
+    const {calc_order_row} = prm;
+    const {nom, characteristic} = calc_order_row;
+    const {partner} = calc_order_row._owner._owner;
+    const filter = nom.price_group.empty() ?
+        {price_group: nom.price_group} :
+        {price_group: {in: [nom.price_group, cat.price_groups.get()]}};
+    const ares = [];
+    ireg.margin_coefficients.find_rows(filter, (row) => {
+      let ok = true;
+      if(!row.key.empty()){
+        row.key.params.forEach((row_prm) => {
+          const {property} = row_prm;
+          if(property.is_calculated){
+            ok = utils.check_compare(property.calculated_value({calc_order_row}), property.extract_value(row_prm), row_prm.comparison_type, enm.comparison_types);
+          }
+          else if(property.empty()){
+            const vpartner = cat.partners.get(row_prm._obj.value, false, true);
+            if(vpartner && !vpartner.empty()){
+              ok = vpartner == partner;
+            }
+          }
+          else{
+            let finded;
+            characteristic.params.find_rows({
+              cnstr: 0,
+              param: property
+            }, (row_x) => {
+              finded = row_x;
+              return false;
+            });
+            if(finded){
+              ok = utils.check_compare(finded.value, property.extract_value(row_prm), row_prm.comparison_type, enm.comparison_types);
+            }
+            else{
+              ok = false;
+            }
+          }
+          if(!ok){
+            return false;
+          }
+        });
+      }
+      if(ok){
+        ares.push(row);
+      }
+    });
+    if(ares.length){
+      ares.sort((a, b) => {
+        if ((!a.key.empty() && b.key.empty()) || (a.key.priority > b.key.priority)) {
+          return -1;
+        }
+        if ((a.key.empty() && !b.key.empty()) || (a.key.priority < b.key.priority)) {
+          return 1;
+        }
+        if (a.price_group.ref > b.price_group.ref) {
+          return -1;
+        }
+        if (a.price_group.ref < b.price_group.ref) {
+          return 1;
+        }
+        return 0;
+      });
+      Object.keys(prm.price_type).forEach((key) => {
+        prm.price_type[key] = ares[0][key];
+      });
+    }
+    partner.extra_fields.find_rows({
+      property: job_prm.pricing.dealer_surcharge
+    }, (row) => {
+      const val = parseFloat(row.value);
+      if(val){
+        prm.price_type.extra_charge_external = val;
+      }
+      return false;
+    });
+    return prm.price_type;
+  }
+  calc_first_cost(prm) {
+    const {marginality_in_spec} = $p.job_prm.pricing;
+    const fake_row = {};
+    if(!prm.spec)
+      return;
+    if(prm.spec.count()){
+      prm.spec.forEach((row) => {
+        const {_obj, nom, characteristic} = row;
+        this.nom_price(nom, characteristic, prm.price_type.price_type_first_cost, prm, _obj);
+        _obj.amount = _obj.price * _obj.totqty1;
+        if(marginality_in_spec){
+          fake_row.nom = nom;
+          const tmp_price = this.nom_price(nom, characteristic, prm.price_type.price_type_sale, prm, fake_row);
+          _obj.amount_marged = (tmp_price ? tmp_price : _obj.price) * _obj.totqty1;
+        }
+      });
+      prm.calc_order_row.first_cost = prm.spec.aggregate([], ["amount"]).round(2);
+    }
+    else{
+      fake_row.nom = prm.calc_order_row.nom;
+      fake_row.characteristic = prm.calc_order_row.characteristic;
+      prm.calc_order_row.first_cost = this.nom_price(fake_row.nom, fake_row.characteristic, prm.price_type.price_type_first_cost, prm, fake_row);
+    }
+    prm.order_rows && prm.order_rows.forEach((value) => {
+      const fake_prm = {
+        spec: value.characteristic.specification,
+        calc_order_row: value
+      };
+      this.price_type(fake_prm);
+      this.calc_first_cost(fake_prm);
+    });
+  }
+  calc_amount (prm) {
+    const {calc_order_row, price_type} = prm;
+    const price_cost = $p.job_prm.pricing.marginality_in_spec && prm.spec.count() ?
+      prm.spec.aggregate([], ["amount_marged"]) :
+      this.nom_price(calc_order_row.nom, calc_order_row.characteristic, price_type.price_type_sale, prm, {});
+    if(price_cost){
+      calc_order_row.price = price_cost.round(2);
+    }
+    else{
+      calc_order_row.price = (calc_order_row.first_cost * price_type.marginality).round(2);
+    }
+    calc_order_row.marginality = calc_order_row.first_cost ?
+      calc_order_row.price * ((100 - calc_order_row.discount_percent)/100) / calc_order_row.first_cost : 0;
+    let extra_charge = $p.wsql.get_user_param("surcharge_internal", "number");
+    if(!$p.current_user.partners_uids.length || !extra_charge){
+      extra_charge = price_type.extra_charge_external || 0;
+    }
+    calc_order_row.price_internal = (calc_order_row.price *
+      (100 - calc_order_row.discount_percent)/100 * (100 + extra_charge)/100).round(2);
+    !prm.hand_start && calc_order_row.value_change("price", {}, calc_order_row.price, true);
+    prm.order_rows && prm.order_rows.forEach((value) => {
+      const fake_prm = {
+        spec: value.characteristic.specification,
+        calc_order_row: value
+      };
+      this.price_type(fake_prm);
+      this.calc_amount(fake_prm);
+    });
+  }
+  from_currency_to_currency (amount, date, from, to) {
+    const {main_currency} = $p.job_prm.pricing;
+    if(!to || to.empty()){
+      to = main_currency;
+    }
+    if(!from || from.empty()){
+      from = main_currency;
+    }
+    if(from == to){
+      return amount;
+    }
+    if(!date){
+      date = new Date();
+    }
+    if(!this.cource_sql){
+      this.cource_sql = $p.wsql.alasql.compile("select top 1 * from `ireg_currency_courses` where `currency` = ? and `period` <= ? order by `period` desc");
+    }
+    let cfrom = {course: 1, multiplicity: 1},
+      cto = {course: 1, multiplicity: 1};
+    if(from != main_currency){
+      const tmp = this.cource_sql([from.ref, date]);
+      if(tmp.length)
+        cfrom = tmp[0];
+    }
+    if(to != main_currency){
+      const tmp = this.cource_sql([to.ref, date]);
+      if(tmp.length)
+        cto = tmp[0];
+    }
+    return (amount * cfrom.course / cfrom.multiplicity) * cto.multiplicity / cto.course;
+  }
+  cut_upload () {
+    if(!$p.current_user.role_available("СогласованиеРасчетовЗаказов") && !$p.current_user.role_available("ИзменениеТехнологическойНСИ")){
+      $p.msg.show_msg({
+        type: "alert-error",
+        text: $p.msg.error_low_acl,
+        title: $p.msg.error_rights
+      });
+      return true;
+    }
+    function upload_acc() {
+      const mgrs = [
+        "cat.users",
+        "cat.individuals",
+        "cat.organizations",
+        "cat.partners",
+        "cat.contracts",
+        "cat.currencies",
+        "cat.nom_prices_types",
+        "cat.price_groups",
+        "cat.cashboxes",
+        "cat.partner_bank_accounts",
+        "cat.organization_bank_accounts",
+        "cat.projects",
+        "cat.stores",
+        "cat.cash_flow_articles",
+        "cat.cost_items",
+        "cat.price_groups",
+        "cat.delivery_areas",
+        "ireg.currency_courses",
+        "ireg.margin_coefficients"
+      ];
+      $p.wsql.pouch.local.ram.replicate.to($p.wsql.pouch.remote.ram, {
+        filter: (doc) => mgrs.indexOf(doc._id.split("|")[0]) != -1
+      })
+        .on('change', (info) => {
+        })
+        .on('paused', (err) => {
+        })
+        .on('active', () => {
+        })
+        .on('denied', (err) => {
+          $p.msg.show_msg(err.reason);
+          $p.record_log(err);
+        })
+        .on('complete', (info) => {
+          if($p.current_user.role_available("ИзменениеТехнологическойНСИ"))
+            upload_tech();
+          else
+            $p.msg.show_msg({
+              type: "alert-info",
+              text: $p.msg.sync_complite,
+              title: $p.msg.sync_title
+            });
+        })
+        .on('error', (err) => {
+          $p.msg.show_msg(err.reason);
+          $p.record_log(err);
+        });
+    }
+    function upload_tech() {
+      const mgrs = [
+        "cat.units",
+        "cat.nom",
+        "cat.nom_groups",
+        "cat.nom_units",
+        "cat.nom_kinds",
+        "cat.elm_visualization",
+        "cat.destinations",
+        "cat.property_values",
+        "cat.property_values_hierarchy",
+        "cat.inserts",
+        "cat.insert_bind",
+        "cat.color_price_groups",
+        "cat.clrs",
+        "cat.furns",
+        "cat.cnns",
+        "cat.production_params",
+        "cat.parameters_keys",
+        "cat.formulas",
+        "cch.properties",
+        "cch.predefined_elmnts"
+      ];
+      $p.wsql.pouch.local.ram.replicate.to($p.wsql.pouch.remote.ram, {
+        filter: (doc) => mgrs.indexOf(doc._id.split("|")[0]) != -1
+      })
+        .on('change', (info) => {
+        })
+        .on('paused', (err) => {
+        })
+        .on('active', () => {
+        })
+        .on('denied', (err) => {
+          $p.msg.show_msg(err.reason);
+          $p.record_log(err);
+        })
+        .on('complete', (info) => {
+          $p.msg.show_msg({
+            type: "alert-info",
+            text: $p.msg.sync_complite,
+            title: $p.msg.sync_title
+          });
+        })
+        .on('error', (err) => {
+          $p.msg.show_msg(err.reason);
+          $p.record_log(err);
+        });
+    }
+    if($p.current_user.role_available("СогласованиеРасчетовЗаказов"))
+      upload_acc();
+    else
+      upload_tech();
+  }
+}
+$p.pricing = new Pricing($p);
 class ProductsBuilding$1 {
   constructor(listen) {
     let added_cnn_spec,
@@ -11329,7 +12102,7 @@ class ProductsBuilding$1 {
           len: row_cnn.length ? row_cnn[0].aperture_len : 0,
           origin: cnn_row(_row.elm, curr.profile.elm)
         };
-        cnn_add_spec(curr.cnn, curr.profile, len_angl);
+        (len_angl.len > 3) && cnn_add_spec(curr.cnn, curr.profile, len_angl);
       }
       elm.inset.calculate_spec({elm, ox});
       imposts.forEach(base_spec_profile);
@@ -11423,13 +12196,20 @@ class ProductsBuilding$1 {
         scheme.notify(scheme, 'scheme_snapshot', attr);
       }
       if(attr.save) {
-        ox.save(undefined, undefined, {
-          svg: {
-            content_type: 'image/svg+xml',
-            data: new Blob([scheme.get_svg()], {type: 'image/svg+xml'})
-          }
-        })
-          .then(() => {
+        let saver;
+        if($p.job_prm.use_svgs) {
+          ox.save(undefined, undefined, {
+            svg: {
+              content_type: 'image/svg+xml',
+              data: new Blob([scheme.get_svg()], {type: 'image/svg+xml'})
+            }
+          });
+        }
+        else {
+          ox.svg = scheme.get_svg();
+          saver = ox.save();
+        }
+        saver.then(() => {
             $p.msg.show_msg([ox.name, 'Спецификация рассчитана']);
             delete scheme._attr._saving;
             ox.calc_order.characteristic_saved(scheme, attr);
@@ -11582,6 +12362,96 @@ if(typeof global !== 'undefined'){
 }
 $p.ProductsBuilding = ProductsBuilding$1;
 $p.products_building = new ProductsBuilding$1(true);
+class SpecBuilding {
+  constructor($p$$1) {
+  }
+  calc_row_spec (prm, cancel) {
+  }
+  specification_adjustment (attr, with_price) {
+    const {scheme, calc_order_row, spec, save} = attr;
+    const calc_order = calc_order_row._owner._owner;
+    const order_rows = new Map();
+    const adel = [];
+    const ox = calc_order_row.characteristic;
+    const nom = ox.empty() ? calc_order_row.nom : (calc_order_row.nom = ox.owner);
+    $p.pricing.price_type(attr);
+    spec.find_rows({ch: {in: [-1, -2]}}, (row) => adel.push(row));
+    adel.forEach((row) => spec.del(row, true));
+    $p.cat.insert_bind.insets(ox).forEach(({inset, elm_type}) => {
+      const elm = {
+        _row: {},
+        elm: 0,
+        get perimeter() {return scheme ? scheme.perimeter : []},
+        clr: ox.clr,
+        project: scheme,
+      };
+      const len_angl = {
+        angle: 0,
+        alp1: 0,
+        alp2: 0,
+        len: 0,
+        cnstr: 0,
+        origin: inset,
+      };
+      inset.calculate_spec({elm, len_angl, ox, spec});
+    });
+    if(!ox.empty()){
+      adel.length = 0;
+      calc_order.production.forEach((row) => {
+        if (row.ordn === ox){
+          if (ox._order_rows.indexOf(row.characteristic) === -1){
+            adel.push(row);
+          }
+          else {
+            order_rows.set(row.characteristic, row);
+          }
+        }
+      });
+      adel.forEach((row) => calc_order.production.del(row.row-1));
+    }
+    const ax = [];
+    ox._order_rows && ox._order_rows.forEach((cx) => {
+      const row = order_rows.get(cx) || calc_order.production.add({characteristic: cx});
+      row.nom = cx.owner;
+      row.unit = row.nom.storage_unit;
+      row.ordn = ox;
+      row.len = cx.x;
+      row.width = cx.y;
+      row.s = cx.s;
+      row.qty = calc_order_row.qty;
+      row.quantity = calc_order_row.quantity;
+      save && ax.push(cx.save().catch($p.record_log));
+      order_rows.set(cx, row);
+    });
+    if(order_rows.size){
+      attr.order_rows = order_rows;
+    }
+    if(with_price){
+      $p.pricing.calc_first_cost(attr);
+      $p.pricing.calc_amount(attr);
+    }
+    if(save && !attr.scheme && (ox.is_new() || ox._modified)){
+      ax.push(ox.save().catch($p.record_log));
+    }
+    return ax;
+  }
+}
+$p.spec_building = new SpecBuilding($p);
+(function ({prototype}) {
+  const {value_mgr} = prototype;
+  prototype.value_mgr = function(row, f, mf, array_enabled, v) {
+		const tmp = value_mgr.call(this, row, f, mf, array_enabled, v);
+		if(tmp){
+      return tmp;
+    }
+		if(f == 'trans'){
+      return $p.doc.calc_order;
+    }
+		else if(f == 'partner'){
+      return $p.cat.partners;
+    }
+	};
+})($p.classes.DataManager);
 delete Contour.prototype.refresh_links;
 Contour.prototype.refresh_links = function () {
 };
