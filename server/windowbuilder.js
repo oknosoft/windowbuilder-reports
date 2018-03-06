@@ -472,6 +472,30 @@ class Contour extends AbstractFilling(paper.Layer) {
     }
   }
 
+  /**
+   * ### Габаритная площадь контура
+   */
+  get area() {
+    return (this.bounds.area/1e6).round(3);
+  }
+
+  /**
+   * ### Площядь контура с учетом наклонов-изгибов профиля
+   * Получаем, как сумму площадей всех заполнений и профилей контура
+   * Вычисления тяжелые, но в общем случае, с учетом незамкнутых контуров и соединений с пустотой, короче не сделать
+   */
+  get form_area() {
+    let upath;
+    this.glasses(false, true).concat(this.profiles).forEach(({path}) => {
+      if(upath) {
+        upath = upath.unite(path, {insert: false});
+      }
+      else {
+        upath = path.clone({insert: false});
+      }
+    });
+    return (upath.area/1e6).round(3);
+  }
 
   /**
    * указатель на фурнитуру
@@ -3951,7 +3975,7 @@ class Filling extends AbstractFilling(BuilderElement) {
       formula: this.formula(),
       width: bounds.width,
       height: bounds.height,
-      s: this.s,
+      s: this.area,
       is_rectangular: this.is_rectangular,
       is_sandwich: nom.elm_type == $p.enm.elm_types.Заполнение,
       thickness: this.thickness,
@@ -4280,12 +4304,21 @@ class Filling extends AbstractFilling(BuilderElement) {
     }
   }
 
+
   /**
-   * Площадь заполнения
+   * Габаритная площадь заполнения
    * @return {number}
    */
-  get s() {
-    return this.bounds.width * this.bounds.height / 1000000;
+  get area() {
+    return (this.bounds.area / 1e6).round(5);
+  }
+
+  /**
+   * Площядь заполнения с учетом наклонов-изгибов сегментов
+   * @return {number}
+   */
+  get form_area() {
+    return (this.path.area/1e6).round(5);
   }
 
   /**
@@ -10114,15 +10147,27 @@ class Scheme extends paper.Project {
   }
 
   /**
-   * ### Площадь изделия
-   * TODO: переделать с учетом пустот, наклонов и криволинейностей
+   * ### Габаритная площадь изделия
+   * Сумма габаритных площадей рамных контуров
    *
    * @property area
    * @type Number
    * @final
    */
   get area() {
-    return (this.bounds.width * this.bounds.height / 1000000).round(3);
+    return this.contours.reduce((sum, {area}) => sum + area, 0);
+  }
+
+  /**
+   * ### Площадь изделия с учетом наклонов-изгибов профиля
+   * Сумма площадей рамных контуров
+   *
+   * @property area
+   * @type Number
+   * @final
+   */
+  get form_area() {
+    return this.contours.reduce((sum, {form_area}) => sum + form_area, 0);
   }
 
   /**
@@ -13088,10 +13133,7 @@ async function prod(ctx, next) {
       res[ref] = {
         constructions: _obj.constructions || [],
         coordinates: _obj.coordinates || [],
-        specification: _obj.specification ? _obj.specification.map((o) => {
-          const onom = nom.get(o.nom);
-          return Object.assign(o, {article: onom.article})
-        }) : [],
+        specification: _obj.specification ? _obj.specification.map((o) => Object.assign(o, {article: nom.get(o.nom).article})) : [],
         glasses: _obj.glasses,
         params: _obj.params,
         clr: _obj.clr,

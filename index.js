@@ -4201,6 +4201,21 @@ class Contour extends AbstractFilling(paper$1.Layer) {
       this.project.register_update();
     }
   }
+  get area() {
+    return (this.bounds.area/1e6).round(3);
+  }
+  get form_area() {
+    let upath;
+    this.glasses(false, true).concat(this.profiles).forEach(({path}) => {
+      if(upath) {
+        upath = upath.unite(path, {insert: false});
+      }
+      else {
+        upath = path.clone({insert: false});
+      }
+    });
+    return (upath.area/1e6).round(3);
+  }
   get furn() {
     return this._row.furn;
   }
@@ -6647,7 +6662,7 @@ class Filling extends AbstractFilling(BuilderElement) {
       formula: this.formula(),
       width: bounds.width,
       height: bounds.height,
-      s: this.s,
+      s: this.area,
       is_rectangular: this.is_rectangular,
       is_sandwich: nom.elm_type == $p.enm.elm_types.Заполнение,
       thickness: this.thickness,
@@ -6873,8 +6888,11 @@ class Filling extends AbstractFilling(BuilderElement) {
       onlay.remove();
     }
   }
-  get s() {
-    return this.bounds.width * this.bounds.height / 1000000;
+  get area() {
+    return (this.bounds.area / 1e6).round(5);
+  }
+  get form_area() {
+    return (this.path.area/1e6).round(5);
   }
   interiorPoint() {
     return this.path.interiorPoint;
@@ -10582,7 +10600,10 @@ class Scheme extends paper$1.Project {
     return this.layers.filter((l) => l instanceof Contour);
   }
   get area() {
-    return (this.bounds.width * this.bounds.height / 1000000).round(3);
+    return this.contours.reduce((sum, {area}) => sum + area, 0);
+  }
+  get form_area() {
+    return this.contours.reduce((sum, {form_area}) => sum + form_area, 0);
   }
   get clr() {
     return this.ox.clr;
@@ -12507,10 +12528,7 @@ async function prod(ctx, next) {
       res[ref] = {
         constructions: _obj.constructions || [],
         coordinates: _obj.coordinates || [],
-        specification: _obj.specification ? _obj.specification.map((o) => {
-          const onom = nom.get(o.nom);
-          return Object.assign(o, {article: onom.article})
-        }) : [],
+        specification: _obj.specification ? _obj.specification.map((o) => Object.assign(o, {article: nom.get(o.nom).article})) : [],
         glasses: _obj.glasses,
         params: _obj.params,
         clr: _obj.clr,
