@@ -1,5 +1,5 @@
 /*!
- windowbuilder-reports v2.0.237, built:2018-02-28
+ windowbuilder-reports v2.0.237, built:2018-03-06
  © 2014-2018 Evgeniy Malyarov and the Oknosoft team http://www.oknosoft.ru
  To obtain commercial license and technical support, contact info@oknosoft.ru
  */
@@ -189,7 +189,12 @@ var modifiers = function($p) {
 })($p);
 $p.md.once('predefined_elmnts_inited', () => {
   const _mgr = $p.cat.characteristics;
-  _mgr.adapter.load_view(_mgr, 'doc/nom_characteristics')
+  _mgr.adapter.load_view(_mgr, 'linked', {
+    limit: 1000,
+    include_docs: true,
+    startkey: [$p.utils.blank.guid, 'cat.characteristics'],
+    endkey: [$p.utils.blank.guid, 'cat.characteristics\u0fff']
+  })
     .then(() => {
     const {current_user} = $p;
       if(current_user && (
@@ -502,15 +507,15 @@ $p.cat.characteristics.form_obj = function (pwnd, attr) {
 	class SelectionBlock {
 	  constructor(_mgr) {
 	    this._obj = {
-        calc_order: $p.wsql.get_user_param("template_block_calc_order")
+        calc_order: $p.wsql.get_user_param('template_block_calc_order')
       };
       this._meta = Object.assign(_mgr.metadata()._clone(), {
         form: {
           selection: {
-            fields: ["presentation","svg"],
+            fields: ['presentation', 'svg'],
             cols: [
-              {"id": "presentation", "width": "320", "type": "ro", "align": "left", "sort": "na", "caption": "Наименование"},
-              {"id": "svg", "width": "*", "type": "rsvg", "align": "left", "sort": "na", "caption": "Эскиз"}
+              {id: 'presentation', width: '320', type: 'ro', align: 'left', sort: 'na', caption: 'Наименование'},
+              {id: 'svg', width: '*', type: 'rsvg', align: 'left', sort: 'na', caption: 'Эскиз'}
             ]
           }
         }
@@ -523,11 +528,11 @@ $p.cat.characteristics.form_obj = function (pwnd, attr) {
     get _manager() {
 	    return {
         value_mgr: $p.md.value_mgr,
-        class_name: "dp.fake"
+        class_name: 'dp.fake'
       }
     }
     get calc_order() {
-      return $p.CatCharacteristics.prototype._getter.call(this, "calc_order");
+      return $p.CatCharacteristics.prototype._getter.call(this, 'calc_order');
     }
     set calc_order(v) {
 	    const {_obj, attr} = this;
@@ -543,8 +548,8 @@ $p.cat.characteristics.form_obj = function (pwnd, attr) {
         wnd.elmnts.filter.call_event();
       }
       if(!$p.utils.is_empty_guid(_obj.calc_order) &&
-        $p.wsql.get_user_param("template_block_calc_order") != _obj.calc_order){
-        $p.wsql.set_user_param("template_block_calc_order", _obj.calc_order);
+        $p.wsql.get_user_param('template_block_calc_order') != _obj.calc_order) {
+        $p.wsql.set_user_param('template_block_calc_order', _obj.calc_order);
       }
     }
   }
@@ -559,35 +564,33 @@ $p.cat.characteristics.form_obj = function (pwnd, attr) {
 				return true;
 			});
 		}
-		attr.initial_value = $p.wsql.get_user_param("template_block_initial_value");
+    attr.initial_value = $p.wsql.get_user_param('template_block_initial_value');
 		attr.metadata = selection_block._meta;
 		attr.custom_selection = function (attr) {
 			const ares = [], crefs = [];
 			let calc_order;
-			attr.selection.some((o) => {
-				if(Object.keys(o).indexOf("calc_order") != -1){
-					calc_order = o.calc_order;
-					return true;
-				}
-			});
+      attr.selection.some((o) => {
+        if(Object.keys(o).indexOf('calc_order') != -1) {
+          calc_order = o.calc_order;
+          return true;
+        }
+      });
 			return $p.doc.calc_order.get(calc_order, true, true)
 				.then((o) => {
-					o.production.each((row) => {
-						if(!row.characteristic.empty()){
-							if(row.characteristic.is_new()){
-                crefs.push(row.characteristic.ref);
+					o.production.forEach(({characteristic}) => {
+						if(!characteristic.empty()){
+							if(characteristic.is_new()){
+                crefs.push(characteristic.ref);
               }
 							else{
-								if(!row.characteristic.calc_order.empty() && row.characteristic.coordinates.count()){
-									if(row.characteristic._attachments &&
-										row.characteristic._attachments.svg &&
-										!row.characteristic._attachments.svg.stub){
-                    ares.push(row.characteristic);
+                if(!characteristic.calc_order.empty() && characteristic.coordinates.count()) {
+                  if(characteristic.svg) {
+                    ares.push(characteristic);
                   }
-									else{
-                    crefs.push(row.characteristic.ref);
+                  else {
+                    crefs.push(characteristic.ref);
                   }
-								}
+                }
 							}
 						}
 					});
@@ -602,22 +605,13 @@ $p.cat.characteristics.form_obj = function (pwnd, attr) {
 					});
 					crefs.length = 0;
 					ares.forEach((o) => {
-            const presentation = ((o.calc_order_row && o.calc_order_row.note) || o.note || o.name) + "<br />" + o.owner.name;
+            const presentation = ((o.calc_order_row && o.calc_order_row.note) || o.note || o.name) + '<br />' + o.owner.name;
 						if(!attr.filter || presentation.toLowerCase().match(attr.filter.toLowerCase()))
 							crefs.push({
 								ref: o.ref,
                 presentation:   '<div style="white-space:normal"> ' + presentation + ' </div>',
-								svg: o._attachments ? o._attachments.svg : ""
+								svg: o.svg || ''
 							});
-					});
-					ares.length = 0;
-					crefs.forEach((o) => {
-						if(o.svg && o.svg.data){
-							ares.push($p.utils.blob_as_text(o.svg.data)
-								.then(function (svg) {
-									o.svg = svg;
-								}));
-						}
 					});
 					return Promise.all(ares);
 				})
@@ -793,25 +787,30 @@ $p.cat.clrs.__define({
 			attr.hide_filter = true;
       attr.toolbar_click = function (btn_id, wnd){
         if(btn_id=="btn_select" && !eclr.clr_in.empty() && !eclr.clr_out.empty()) {
-          const ares = $p.wsql.alasql("select top 1 ref from ? where clr_in = ? and clr_out = ? and (not ref = ?)",
-            [$p.cat.clrs.alatable, eclr.clr_in.ref, eclr.clr_out.ref, $p.utils.blank.guid]);
-          if(ares.length){
-            pwnd.on_select.call(pwnd, $p.cat.clrs.get(ares[0]));
+          if(eclr.clr_in == eclr.clr_out) {
+            pwnd.on_select.call(pwnd, eclr.clr_in);
           }
-          else{
-            $p.cat.clrs.create({
-              clr_in: eclr.clr_in,
-              clr_out: eclr.clr_out,
-              name: eclr.clr_in.name + " \\ " + eclr.clr_out.name,
-              parent: $p.job_prm.builder.composite_clr_folder
-            })
-              .then((obj) => obj.register_on_server())
-              .then((obj) => pwnd.on_select.call(pwnd, obj))
-              .catch((err) => $p.msg.show_msg({
-                type: "alert-warning",
-                text: "Недостаточно прав для добавления составного цвета",
-                title: "Составной цвет"
-              }));
+          else {
+            const ares = $p.wsql.alasql("select top 1 ref from cat_clrs where clr_in = ? and clr_out = ? and (not ref = ?)",
+              [eclr.clr_in.ref, eclr.clr_out.ref, $p.utils.blank.guid]);
+            if(ares.length){
+              pwnd.on_select.call(pwnd, $p.cat.clrs.get(ares[0]));
+            }
+            else{
+              $p.cat.clrs.create({
+                clr_in: eclr.clr_in,
+                clr_out: eclr.clr_out,
+                name: eclr.clr_in.name + " \\ " + eclr.clr_out.name,
+                parent: $p.job_prm.builder.composite_clr_folder
+              })
+                .then((obj) => obj.register_on_server())
+                .then((obj) => pwnd.on_select.call(pwnd, obj))
+                .catch((err) => $p.msg.show_msg({
+                  type: 'alert-warning',
+                  text: 'Недостаточно прав для добавления составного цвета',
+                  title: 'Составной цвет'
+                }));
+            }
           }
           wnd.close();
           return false;
@@ -861,33 +860,37 @@ $p.cat.clrs.__define({
 					});
 					eclr.clr_in = $p.utils.blank.guid;
 					eclr.clr_out = $p.utils.blank.guid;
-					const clr_in = new $p.iface.OCombo({
-						parent: tb_filter.div.obj,
-						obj: eclr,
-						field: "clr_in",
-						width: 150,
-						hide_frm: true,
-						get_option_list: get_option_list
-					});
-					const clr_out = new $p.iface.OCombo({
-						parent: tb_filter.div.obj,
-						obj: eclr,
-						field: "clr_out",
-						width: 150,
-						hide_frm: true,
-						get_option_list: get_option_list
-					});
-					clr_in.DOMelem.style.float = "left";
-					clr_in.DOMelem_input.placeholder = "Цвет изнутри";
-					clr_out.DOMelem_input.placeholder = "Цвет снаружи";
-					clr_in.attachEvent("onChange", tb_filter.call_event);
-					clr_out.attachEvent("onChange", tb_filter.call_event);
-					clr_in.attachEvent("onClose", tb_filter.call_event);
-					clr_out.attachEvent("onClose", tb_filter.call_event);
-          wnd.elmnts.toolbar.hideItem("btn_new");
-          wnd.elmnts.toolbar.hideItem("btn_edit");
-          wnd.elmnts.toolbar.hideItem("btn_delete");
-          wnd.elmnts.toolbar.setItemText("btn_select", "<b>Выбрать или создать</b>");
+          const clr_in = new $p.iface.OCombo({
+            parent: tb_filter.div.obj,
+            obj: eclr,
+            field: 'clr_in',
+            width: 160,
+            hide_frm: true,
+            get_option_list: get_option_list
+          });
+          const clr_out = new $p.iface.OCombo({
+            parent: tb_filter.div.obj,
+            obj: eclr,
+            field: 'clr_out',
+            width: 160,
+            hide_frm: true,
+            get_option_list: get_option_list
+          });
+          const clr_in_title = document.createElement('DIV');
+          clr_in_title.innerHTML = 'Со стороны петель';
+          clr_in_title.style = 'position: absolute;top: -4px;padding-left: 2px;font-size: small;color: gray;';
+          tb_filter.div.obj.appendChild(clr_in_title);
+          clr_in.DOMelem.style.float = 'left';
+          clr_in.DOMelem_input.placeholder = 'Цвет изнутри';
+          clr_out.DOMelem_input.placeholder = 'Цвет снаружи';
+          clr_in.attachEvent('onChange', tb_filter.call_event);
+          clr_out.attachEvent('onChange', tb_filter.call_event);
+          clr_in.attachEvent('onClose', tb_filter.call_event);
+          clr_out.attachEvent('onClose', tb_filter.call_event);
+          wnd.elmnts.toolbar.hideItem('btn_new');
+          wnd.elmnts.toolbar.hideItem('btn_edit');
+          wnd.elmnts.toolbar.hideItem('btn_delete');
+          wnd.elmnts.toolbar.setItemText('btn_select', '<b>Выбрать или создать</b>');
 					return wnd;
 				})
 		}
@@ -2564,7 +2567,7 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
       _obj.state = 'draft';
     }
     const rows_saver = this.product_rows(true);
-    const res = this._manager.pouch_db.query('svgs', {startkey: [this.ref, 0], endkey: [this.ref, 10e9]})
+    const res = this._manager.pouch_db.query('linked', {startkey: [this.ref, 'cat.characteristics'], endkey: [this.ref, 'cat.characteristics\u0fff']})
       .then(({rows}) => {
         const deleted = [];
         for (const {id} of rows) {
@@ -11340,14 +11343,17 @@ class Pricing {
     return pouch.remote.doc.get(`_local/price_${step}`)
       .then((remote) => {
         return pouch.local.doc.get(`_local/price_${step}`)
-          .then((local) => local.remote_rev)
-          .catch(() => null)
-          .then((rev) => {
+          .then((local) => local)
+          .catch(() => {})
+          .then((local) => {
             this.build_cache_local(remote);
-            if(rev !== remote._rev) {
+            if(local.remote_rev !== remote._rev) {
               remote.remote_rev = remote._rev;
-              if(!rev) {
+              if(!local._rev) {
                 delete remote._rev;
+              }
+              else {
+                remote._rev = local._rev;
               }
               pouch.local.doc.put(remote);
             }
@@ -12499,13 +12505,13 @@ async function prod(ctx, next) {
       const {_obj} = ox;
       const ref = snake_ref(ox.ref);
       res[ref] = {
-        constructions: _obj.constructions,
-        coordinates: _obj.coordinates,
-        specification: _obj.specification.map((o) => {
+        constructions: _obj.constructions || [],
+        coordinates: _obj.coordinates || [],
+        specification: _obj.specification ? _obj.specification.map((o) => {
           const onom = nom.get(o.nom);
           return Object.assign(o, {article: onom.article})
-        }),
-      glasses: _obj.glasses,
+        }) : [],
+        glasses: _obj.glasses,
         params: _obj.params,
         clr: _obj.clr,
         sys: _obj.sys,

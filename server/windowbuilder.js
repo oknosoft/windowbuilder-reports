@@ -11312,17 +11312,20 @@ class Pricing {
     return pouch.remote.doc.get(`_local/price_${step}`)
       .then((remote) => {
         return pouch.local.doc.get(`_local/price_${step}`)
-          .then((local) => local.remote_rev)
-          .catch(() => null)
-          .then((rev) => {
+          .then((local) => local)
+          .catch(() => {})
+          .then((local) => {
             // грузим цены из remote
             this.build_cache_local(remote);
 
             // если версия local отличается от remote - обновляем
-            if(rev !== remote._rev) {
+            if(local.remote_rev !== remote._rev) {
               remote.remote_rev = remote._rev;
-              if(!rev) {
+              if(!local._rev) {
                 delete remote._rev;
+              }
+              else {
+                remote._rev = local._rev;
               }
               pouch.local.doc.put(remote);
             }
@@ -13083,13 +13086,13 @@ async function prod(ctx, next) {
       const {_obj} = ox;
       const ref = snake_ref(ox.ref);
       res[ref] = {
-        constructions: _obj.constructions,
-        coordinates: _obj.coordinates,
-        specification: _obj.specification.map((o) => {
+        constructions: _obj.constructions || [],
+        coordinates: _obj.coordinates || [],
+        specification: _obj.specification ? _obj.specification.map((o) => {
           const onom = nom.get(o.nom);
           return Object.assign(o, {article: onom.article})
-        }),
-      glasses: _obj.glasses,
+        }) : [],
+        glasses: _obj.glasses,
         params: _obj.params,
         clr: _obj.clr,
         sys: _obj.sys,

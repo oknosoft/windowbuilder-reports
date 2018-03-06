@@ -67,13 +67,10 @@ async function prod(ctx, next) {
       const {_obj} = ox;
       const ref = snake_ref(ox.ref);
       res[ref] = {
-        constructions: _obj.constructions,
-        coordinates: _obj.coordinates,
-        specification: _obj.specification.map((o) => {
-          const onom = nom.get(o.nom);
-          return Object.assign(o, {article: onom.article})
-        }),
-      glasses: _obj.glasses,
+        constructions: _obj.constructions || [],
+        coordinates: _obj.coordinates || [],
+        specification: _obj.specification ? _obj.specification.map((o) => Object.assign(o, {article: nom.get(o.nom).article})) : [],
+        glasses: _obj.glasses,
         params: _obj.params,
         clr: _obj.clr,
         sys: _obj.sys,

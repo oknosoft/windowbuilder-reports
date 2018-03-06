@@ -333,7 +333,12 @@ export default function($p) {
 // при старте приложения, загружаем в ОЗУ обычные характеристики (без ссылок на заказы)
 $p.md.once('predefined_elmnts_inited', () => {
   const _mgr = $p.cat.characteristics;
-  _mgr.adapter.load_view(_mgr, 'doc/nom_characteristics')
+  _mgr.adapter.load_view(_mgr, 'linked', {
+    limit: 1000,
+    include_docs: true,
+    startkey: [$p.utils.blank.guid, 'cat.characteristics'],
+    endkey: [$p.utils.blank.guid, 'cat.characteristics\u0fff']
+  })
     // и корректируем метаданные формы спецификации с учетом ролей пользователя
     .then(() => {
     const {current_user} = $p;
@@ -755,16 +760,16 @@ $p.cat.characteristics.form_obj = function (pwnd, attr) {
 	  constructor(_mgr) {
 
 	    this._obj = {
-        calc_order: $p.wsql.get_user_param("template_block_calc_order")
+        calc_order: $p.wsql.get_user_param('template_block_calc_order')
       }
 
       this._meta = Object.assign(_mgr.metadata()._clone(), {
         form: {
           selection: {
-            fields: ["presentation","svg"],
+            fields: ['presentation', 'svg'],
             cols: [
-              {"id": "presentation", "width": "320", "type": "ro", "align": "left", "sort": "na", "caption": "Наименование"},
-              {"id": "svg", "width": "*", "type": "rsvg", "align": "left", "sort": "na", "caption": "Эскиз"}
+              {id: 'presentation', width: '320', type: 'ro', align: 'left', sort: 'na', caption: 'Наименование'},
+              {id: 'svg', width: '*', type: 'rsvg', align: 'left', sort: 'na', caption: 'Эскиз'}
             ]
           }
         }
@@ -780,12 +785,12 @@ $p.cat.characteristics.form_obj = function (pwnd, attr) {
     get _manager() {
 	    return {
         value_mgr: $p.md.value_mgr,
-        class_name: "dp.fake"
+        class_name: 'dp.fake'
       }
     }
 
     get calc_order() {
-      return $p.CatCharacteristics.prototype._getter.call(this, "calc_order");
+      return $p.CatCharacteristics.prototype._getter.call(this, 'calc_order');
     }
     set calc_order(v) {
 
@@ -806,8 +811,8 @@ $p.cat.characteristics.form_obj = function (pwnd, attr) {
       }
 
       if(!$p.utils.is_empty_guid(_obj.calc_order) &&
-        $p.wsql.get_user_param("template_block_calc_order") != _obj.calc_order){
-        $p.wsql.set_user_param("template_block_calc_order", _obj.calc_order);
+        $p.wsql.get_user_param('template_block_calc_order') != _obj.calc_order) {
+        $p.wsql.set_user_param('template_block_calc_order', _obj.calc_order);
       }
     }
 
@@ -830,7 +835,7 @@ $p.cat.characteristics.form_obj = function (pwnd, attr) {
 		}
 
 		// начальное значение - выбранные в предыдущий раз типовой блок
-		attr.initial_value = $p.wsql.get_user_param("template_block_initial_value");
+    attr.initial_value = $p.wsql.get_user_param('template_block_initial_value');
 
 		// подсовываем типовой форме списка изменённые метаданные
 		attr.metadata = selection_block._meta;
@@ -841,35 +846,33 @@ $p.cat.characteristics.form_obj = function (pwnd, attr) {
 			let calc_order;
 
 			// получаем ссылку на расчет из отбора
-			attr.selection.some((o) => {
-				if(Object.keys(o).indexOf("calc_order") != -1){
-					calc_order = o.calc_order;
-					return true;
-				}
-			});
+      attr.selection.some((o) => {
+        if(Object.keys(o).indexOf('calc_order') != -1) {
+          calc_order = o.calc_order;
+          return true;
+        }
+      });
 
 			// получаем документ расчет
 			return $p.doc.calc_order.get(calc_order, true, true)
 				.then((o) => {
 
 					// получаем массив ссылок на характеристики в табчасти продукции
-					o.production.each((row) => {
-						if(!row.characteristic.empty()){
-							if(row.characteristic.is_new()){
-                crefs.push(row.characteristic.ref);
+					o.production.forEach(({characteristic}) => {
+						if(!characteristic.empty()){
+							if(characteristic.is_new()){
+                crefs.push(characteristic.ref);
               }
 							else{
 								// если это характеристика продукции - добавляем
-								if(!row.characteristic.calc_order.empty() && row.characteristic.coordinates.count()){
-									if(row.characteristic._attachments &&
-										row.characteristic._attachments.svg &&
-										!row.characteristic._attachments.svg.stub){
-                    ares.push(row.characteristic);
+                if(!characteristic.calc_order.empty() && characteristic.coordinates.count()) {
+                  if(characteristic.svg) {
+                    ares.push(characteristic);
                   }
-									else{
-                    crefs.push(row.characteristic.ref);
+                  else {
+                    crefs.push(characteristic.ref);
                   }
-								}
+                }
 							}
 						}
 					});
@@ -888,25 +891,15 @@ $p.cat.characteristics.form_obj = function (pwnd, attr) {
 					// фильтруем по подстроке
 					crefs.length = 0;
 					ares.forEach((o) => {
-            const presentation = ((o.calc_order_row && o.calc_order_row.note) || o.note || o.name) + "<br />" + o.owner.name;
+            const presentation = ((o.calc_order_row && o.calc_order_row.note) || o.note || o.name) + '<br />' + o.owner.name;
 						if(!attr.filter || presentation.toLowerCase().match(attr.filter.toLowerCase()))
 							crefs.push({
 								ref: o.ref,
                 presentation:   '<div style="white-space:normal"> ' + presentation + ' </div>',
-								svg: o._attachments ? o._attachments.svg : ""
+								svg: o.svg || ''
 							});
 					});
 
-					// догружаем изображения
-					ares.length = 0;
-					crefs.forEach((o) => {
-						if(o.svg && o.svg.data){
-							ares.push($p.utils.blob_as_text(o.svg.data)
-								.then(function (svg) {
-									o.svg = svg;
-								}))
-						}
-					});
 					return Promise.all(ares);
 
 				})
@@ -1146,29 +1139,35 @@ $p.cat.clrs.__define({
         // если указаны оба цвета
         if(btn_id=="btn_select" && !eclr.clr_in.empty() && !eclr.clr_out.empty()) {
 
-          // ищем в справочнике цветов
-          const ares = $p.wsql.alasql("select top 1 ref from ? where clr_in = ? and clr_out = ? and (not ref = ?)",
-            [$p.cat.clrs.alatable, eclr.clr_in.ref, eclr.clr_out.ref, $p.utils.blank.guid]);
-
-          // если не нашли - создаём
-          if(ares.length){
-            pwnd.on_select.call(pwnd, $p.cat.clrs.get(ares[0]));
+          // если цвета изнутри и снаружи одинаковы, возвращаем первый
+          if(eclr.clr_in == eclr.clr_out) {
+            pwnd.on_select.call(pwnd, eclr.clr_in);
           }
-          else{
-            $p.cat.clrs.create({
-              clr_in: eclr.clr_in,
-              clr_out: eclr.clr_out,
-              name: eclr.clr_in.name + " \\ " + eclr.clr_out.name,
-              parent: $p.job_prm.builder.composite_clr_folder
-            })
-            // регистрируем цвет в couchdb
-              .then((obj) => obj.register_on_server())
-              .then((obj) => pwnd.on_select.call(pwnd, obj))
-              .catch((err) => $p.msg.show_msg({
-                type: "alert-warning",
-                text: "Недостаточно прав для добавления составного цвета",
-                title: "Составной цвет"
-              }));
+          else {
+            // ищем в справочнике цветов
+            const ares = $p.wsql.alasql("select top 1 ref from cat_clrs where clr_in = ? and clr_out = ? and (not ref = ?)",
+              [eclr.clr_in.ref, eclr.clr_out.ref, $p.utils.blank.guid]);
+
+            // если не нашли - создаём
+            if(ares.length){
+              pwnd.on_select.call(pwnd, $p.cat.clrs.get(ares[0]));
+            }
+            else{
+              $p.cat.clrs.create({
+                clr_in: eclr.clr_in,
+                clr_out: eclr.clr_out,
+                name: eclr.clr_in.name + " \\ " + eclr.clr_out.name,
+                parent: $p.job_prm.builder.composite_clr_folder
+              })
+              // регистрируем цвет в couchdb
+                .then((obj) => obj.register_on_server())
+                .then((obj) => pwnd.on_select.call(pwnd, obj))
+                .catch((err) => $p.msg.show_msg({
+                  type: 'alert-warning',
+                  text: 'Недостаточно прав для добавления составного цвета',
+                  title: 'Составной цвет'
+                }));
+            }
           }
 
           wnd.close();
@@ -1234,39 +1233,44 @@ $p.cat.clrs.__define({
 					eclr.clr_in = $p.utils.blank.guid;
 					eclr.clr_out = $p.utils.blank.guid;
 
-					// Создаём элементы управления
-					const clr_in = new $p.iface.OCombo({
-						parent: tb_filter.div.obj,
-						obj: eclr,
-						field: "clr_in",
-						width: 150,
-						hide_frm: true,
-						get_option_list: get_option_list
-					});
-					const clr_out = new $p.iface.OCombo({
-						parent: tb_filter.div.obj,
-						obj: eclr,
-						field: "clr_out",
-						width: 150,
-						hide_frm: true,
-						get_option_list: get_option_list
-					});
+          // Создаём элементы управления
+          const clr_in = new $p.iface.OCombo({
+            parent: tb_filter.div.obj,
+            obj: eclr,
+            field: 'clr_in',
+            width: 160,
+            hide_frm: true,
+            get_option_list: get_option_list
+          });
+          const clr_out = new $p.iface.OCombo({
+            parent: tb_filter.div.obj,
+            obj: eclr,
+            field: 'clr_out',
+            width: 160,
+            hide_frm: true,
+            get_option_list: get_option_list
+          });
 
-					clr_in.DOMelem.style.float = "left";
-					clr_in.DOMelem_input.placeholder = "Цвет изнутри";
-					clr_out.DOMelem_input.placeholder = "Цвет снаружи";
+          const clr_in_title = document.createElement('DIV');
+          clr_in_title.innerHTML = 'Со стороны петель';
+          clr_in_title.style = 'position: absolute;top: -4px;padding-left: 2px;font-size: small;color: gray;';
+          tb_filter.div.obj.appendChild(clr_in_title);
 
-					clr_in.attachEvent("onChange", tb_filter.call_event);
-					clr_out.attachEvent("onChange", tb_filter.call_event);
-					clr_in.attachEvent("onClose", tb_filter.call_event);
-					clr_out.attachEvent("onClose", tb_filter.call_event);
+          clr_in.DOMelem.style.float = 'left';
+          clr_in.DOMelem_input.placeholder = 'Цвет изнутри';
+          clr_out.DOMelem_input.placeholder = 'Цвет снаружи';
 
-					// гасим кнопки управления
-          wnd.elmnts.toolbar.hideItem("btn_new");
-          wnd.elmnts.toolbar.hideItem("btn_edit");
-          wnd.elmnts.toolbar.hideItem("btn_delete");
+          clr_in.attachEvent('onChange', tb_filter.call_event);
+          clr_out.attachEvent('onChange', tb_filter.call_event);
+          clr_in.attachEvent('onClose', tb_filter.call_event);
+          clr_out.attachEvent('onClose', tb_filter.call_event);
 
-          wnd.elmnts.toolbar.setItemText("btn_select", "<b>Выбрать или создать</b>");
+          // гасим кнопки управления
+          wnd.elmnts.toolbar.hideItem('btn_new');
+          wnd.elmnts.toolbar.hideItem('btn_edit');
+          wnd.elmnts.toolbar.hideItem('btn_delete');
+
+          wnd.elmnts.toolbar.setItemText('btn_select', '<b>Выбрать или создать</b>');
 
 					return wnd;
 
@@ -3709,7 +3713,7 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
 
     // пометим на удаление неиспользуемые характеристики
     // этот кусок не влияет на возвращаемое before_save значение и выполняется асинхронно
-    const res = this._manager.pouch_db.query('svgs', {startkey: [this.ref, 0], endkey: [this.ref, 10e9]})
+    const res = this._manager.pouch_db.query('linked', {startkey: [this.ref, 'cat.characteristics'], endkey: [this.ref, 'cat.characteristics\u0fff']})
       .then(({rows}) => {
         const deleted = [];
         for (const {id} of rows) {
