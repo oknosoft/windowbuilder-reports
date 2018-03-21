@@ -12613,8 +12613,8 @@ async function svg(ctx, next) {
 }
 var builder = async (ctx, next) => {
   const {restrict_ips} = ctx.app;
-  if(restrict_ips.length && restrict_ips.indexOf(ctx.ip) == -1){
-    ctx.status = 500;
+  if(restrict_ips.length && restrict_ips.indexOf(ctx.req.headers['x-real-ip'] || ctx.ip) == -1){
+    ctx.status = 403;
     ctx.body = 'ip restricted:' + ctx.ip;
     return;
   }
