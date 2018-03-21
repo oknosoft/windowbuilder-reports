@@ -13297,9 +13297,10 @@ export default async (ctx, next) => {
 
   // если указано ограничение по ip - проверяем
   const {restrict_ips} = ctx.app;
-  if(restrict_ips.length && restrict_ips.indexOf(ctx.req.headers['x-real-ip'] || ctx.ip) == -1){
+  const ip = ctx.req.headers['x-real-ip'] || ctx.ip;
+  if(restrict_ips.length && restrict_ips.indexOf(ip) == -1){
     ctx.status = 403;
-    ctx.body = 'ip restricted:' + ctx.ip;
+    ctx.body = 'ip restricted: ' + ip;
     return;
   }
 
