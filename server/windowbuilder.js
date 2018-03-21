@@ -8,6 +8,9 @@ import paper from 'paper/dist/paper-core.js';
 
 debug('required');
 
+/**
+ * Невизуальный редактор
+ */
 class Editor extends paper.PaperScope {
 
   constructor(format = 'png') {
@@ -19,6 +22,11 @@ class Editor extends paper.PaperScope {
      */
     this.eve = new (Object.getPrototypeOf($p.md.constructor))();
 
+    /**
+     * fake-undo
+     * @type {{clear(), save_snapshot()}}
+     * @private
+     */
     this._undo = {
       clear() {
       },
@@ -33,9 +41,24 @@ class Editor extends paper.PaperScope {
     this.create_scheme(format);
   }
 
+  /**
+   * Заглушка установки заголовка редактора
+   */
   set_text() {
   }
 
+  /**
+   * Возвращает элемент по номеру
+   * @param num
+   */
+  elm(num) {
+    return this.project.getItem({class: BuilderElement, elm: num});
+  }
+
+  /**
+   * Создаёт проект с заданным типом канваса
+   * @param format
+   */
   create_scheme(format = 'png') {
     const _canvas = paper.createCanvas(480, 480, format); // собственно, канвас
     _canvas.style.backgroundColor = '#f9fbfa';
@@ -480,7 +503,7 @@ class Contour extends AbstractFilling(paper.Layer) {
   }
 
   /**
-   * ### Площядь контура с учетом наклонов-изгибов профиля
+   * ### площадь контура с учетом наклонов-изгибов профиля
    * Получаем, как сумму площадей всех заполнений и профилей контура
    * Вычисления тяжелые, но в общем случае, с учетом незамкнутых контуров и соединений с пустотой, короче не сделать
    */
@@ -4314,7 +4337,7 @@ class Filling extends AbstractFilling(BuilderElement) {
   }
 
   /**
-   * Площядь заполнения с учетом наклонов-изгибов сегментов
+   * площадь заполнения с учетом наклонов-изгибов сегментов
    * @return {number}
    */
   get form_area() {
@@ -9335,9 +9358,9 @@ class Scheme extends paper.Project {
      * Перерисовывает все контуры изделия. Не занимается биндингом.
      * Предполагается, что взаимное перемещение профилей уже обработано
      */
-    this.redraw = () => {
+    this.redraw = (from_service) => {
 
-      _attr._opened && typeof requestAnimationFrame == 'function' && requestAnimationFrame(_scheme.redraw);
+      _attr._opened && !from_service && requestAnimationFrame(_scheme.redraw);
 
       if(!_attr._opened || _attr._saving || !_changes.length) {
         return;
@@ -9352,24 +9375,24 @@ class Scheme extends paper.Project {
         _scheme.l_connective.redraw();
 
         // обновляем связи параметров изделия
-        contours[0].refresh_prm_links(true);
+        !from_service && contours[0].refresh_prm_links(true);
 
         // перерисовываем все контуры
         for (let contour of contours) {
           contour.redraw();
-          if(_changes.length && typeof requestAnimationFrame == 'function') {
+          if(_changes.length && !from_service) {
             return;
           }
         }
 
         // если перерисованы все контуры, перерисовываем их размерные линии
         _attr._bounds = null;
-        contours.forEach((l) => {
-          l.contours.forEach((l) => {
+        contours.forEach(({contours, l_dimensions}) => {
+          contours.forEach((l) => {
             l.save_coordinates(true);
-            l.refresh_prm_links();
+            !from_service && l.refresh_prm_links();
           });
-          l.l_dimensions.redraw();
+          l_dimensions.redraw();
         });
 
         // перерисовываем габаритные размерные линии изделия
@@ -9401,7 +9424,7 @@ class Scheme extends paper.Project {
   }
 
   set ox(v) {
-    const {_dp, _attr, _papam_listener} = this;
+    const {_dp, _attr, _scope, _papam_listener} = this;
     let setted;
 
     // пытаемся отключить обсервер от табчасти
@@ -9416,6 +9439,8 @@ class Scheme extends paper.Project {
     _dp.len = ox.x;
     _dp.height = ox.y;
     _dp.s = ox.s;
+    _dp.sys = ox.sys;
+    _dp.clr = ox.clr;
 
     // устанавливаем строку заказа
     _attr._calc_order_row = ox.calc_order_row;
@@ -9430,29 +9455,27 @@ class Scheme extends paper.Project {
 
 
     // устанавливаем в _dp систему профилей
-    if(ox.empty()) {
-      _dp.sys = '';
-    }
-    // для пустой номенклатуры, ставим предыдущую выбранную систему
-    else if(ox.owner.empty()) {
-      _dp.sys = $p.wsql.get_user_param('editor_last_sys');
-      setted = !_dp.sys.empty();
-    }
-    // иначе, ищем первую подходящую систему
-    else if(_dp.sys.empty()) {
-      $p.cat.production_params.find_rows({is_folder: false}, (o) => {
-        if(setted) {
-          return false;
-        }
-        o.production.find_rows({nom: ox.owner}, () => {
-          _dp.sys = o;
-          setted = true;
-          return false;
+    if(_dp.sys.empty()) {
+      if(ox.owner.empty()) {
+        _dp.sys = $p.wsql.get_user_param('editor_last_sys');
+        setted = !_dp.sys.empty();
+      }
+      // иначе, ищем первую подходящую систему
+      else {
+        $p.cat.production_params.find_rows({is_folder: false}, (o) => {
+          if(setted) {
+            return false;
+          }
+          o.production.find_rows({nom: ox.owner}, () => {
+            _dp.sys = o;
+            setted = true;
+            return false;
+          });
         });
-      });
+      }
     }
 
-    // пересчитываем параметры изделия при установке системы
+    // пересчитываем параметры изделия, если изменилась система
     if(setted) {
       _dp.sys.refill_prm(ox);
     }
@@ -9464,7 +9487,7 @@ class Scheme extends paper.Project {
 
     // оповещаем о новых слоях и свойствах изделия
     if(!_attr._silent) {
-      this._scope.eve.emit_async('rows', ox, {constructions: true});
+      _scope.eve.emit_async('rows', ox, {constructions: true});
       _dp._manager.emit_async('rows', _dp, {extra_fields: true});
 
       // начинаем следить за ox, чтобы обработать изменения параметров фурнитуры
@@ -9550,7 +9573,7 @@ class Scheme extends paper.Project {
       load_contour(null);
 
       // перерисовываем каркас
-      _scheme.redraw();
+      _scheme.redraw(from_service);
 
       // запускаем таймер, чтобы нарисовать размерные линии и визуализацию
       return new Promise((resolve, reject) => {
@@ -10155,7 +10178,7 @@ class Scheme extends paper.Project {
    * @final
    */
   get area() {
-    return this.contours.reduce((sum, {area}) => sum + area, 0);
+    return this.contours.reduce((sum, {area}) => sum + area, 0).round(3);
   }
 
   /**
@@ -10167,7 +10190,7 @@ class Scheme extends paper.Project {
    * @final
    */
   get form_area() {
-    return this.contours.reduce((sum, {form_area}) => sum + form_area, 0);
+    return this.contours.reduce((sum, {form_area}) => sum + form_area, 0).round(3);
   }
 
   /**
@@ -11818,7 +11841,8 @@ class Pricing {
         "ireg.margin_coefficients"
       ];
 
-      $p.wsql.pouch.local.ram.replicate.to($p.wsql.pouch.remote.ram, {
+      const {pouch} = $p.adapters;
+      pouch.local.ram.replicate.to(pouch.remote.ram, {
         filter: (doc) => mgrs.indexOf(doc._id.split("|")[0]) != -1
       })
         .on('change', (info) => {
@@ -11883,8 +11907,8 @@ class Pricing {
         "cch.predefined_elmnts"
 
       ];
-
-      $p.wsql.pouch.local.ram.replicate.to($p.wsql.pouch.remote.ram, {
+      const {pouch} = $p.adapters;
+      pouch.local.ram.replicate.to(pouch.remote.ram, {
         filter: (doc) => mgrs.indexOf(doc._id.split("|")[0]) != -1
       })
         .on('change', (info) => {

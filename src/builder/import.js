@@ -8,6 +8,9 @@ import paper from 'paper/dist/paper-core.js';
 
 debug('required');
 
+/**
+ * Невизуальный редактор
+ */
 class Editor extends paper.PaperScope {
 
   constructor(format = 'png') {
@@ -19,6 +22,11 @@ class Editor extends paper.PaperScope {
      */
     this.eve = new (Object.getPrototypeOf($p.md.constructor))();
 
+    /**
+     * fake-undo
+     * @type {{clear(), save_snapshot()}}
+     * @private
+     */
     this._undo = {
       clear() {
       },
@@ -33,9 +41,24 @@ class Editor extends paper.PaperScope {
     this.create_scheme(format);
   }
 
+  /**
+   * Заглушка установки заголовка редактора
+   */
   set_text() {
   }
 
+  /**
+   * Возвращает элемент по номеру
+   * @param num
+   */
+  elm(num) {
+    return this.project.getItem({class: BuilderElement, elm: num});
+  }
+
+  /**
+   * Создаёт проект с заданным типом канваса
+   * @param format
+   */
   create_scheme(format = 'png') {
     const _canvas = paper.createCanvas(480, 480, format); // собственно, канвас
     _canvas.style.backgroundColor = '#f9fbfa';

@@ -333,15 +333,17 @@ export default function($p) {
 // при старте приложения, загружаем в ОЗУ обычные характеристики (без ссылок на заказы)
 $p.md.once('predefined_elmnts_inited', () => {
   const _mgr = $p.cat.characteristics;
+
+  // грузим характеристики
   _mgr.adapter.load_view(_mgr, 'linked', {
-    limit: 1000,
+    limit: 10000,
     include_docs: true,
     startkey: [$p.utils.blank.guid, 'cat.characteristics'],
     endkey: [$p.utils.blank.guid, 'cat.characteristics\u0fff']
   })
-    // и корректируем метаданные формы спецификации с учетом ролей пользователя
     .then(() => {
-    const {current_user} = $p;
+      // и корректируем метаданные формы спецификации с учетом ролей пользователя
+      const {current_user} = $p;
       if(current_user && (
           current_user.role_available('СогласованиеРасчетовЗаказов') ||
           current_user.role_available('ИзменениеТехнологическойНСИ') ||
@@ -1300,12 +1302,8 @@ $p.CatClrs = class CatClrs extends $p.CatClrs {
 
   // записывает элемент цвета на сервере
   register_on_server() {
-    return $p.wsql.pouch.save_obj(this, {
-      db: $p.wsql.pouch.remote.ram
-    })
-      .then(function (obj) {
-        return obj.save();
-      })
+    const {pouch} = $p.adapters;
+    return pouch.save_obj(this, {db: pouch.remote.ram});
   }
 
   // возвращает стороны, на которых цвет
@@ -1789,40 +1787,6 @@ $p.CatElm_visualization.prototype.__define({
  * @module cat_formulas
  *
  */
-
-// обработчик события после загрузки данных в озу
-$p.adapters.pouch.once('pouch_data_loaded', () => {
-  // читаем элементы из pouchdb и создаём формулы
-  const {formulas} = $p.cat;
-  formulas.adapter.find_rows(formulas, {_top: 500, _skip: 0})
-    .then((rows) => {
-      const parents = [formulas.predefined('printing_plates'), formulas.predefined('modifiers')];
-      const filtered = rows.filter(v => !v.disabled && parents.indexOf(v.parent) !== -1);
-      filtered.sort((a, b) => a.sorting_field - b.sorting_field).forEach((formula) => {
-        // формируем списки печатных форм и внешних обработок
-        if(formula.parent == parents[0]) {
-          formula.params.find_rows({param: 'destination'}, (dest) => {
-            const dmgr = $p.md.mgr_by_class_name(dest.value);
-            if(dmgr) {
-              if(!dmgr._printing_plates) {
-                dmgr._printing_plates = {};
-              }
-              dmgr._printing_plates[`prn_${formula.ref}`] = formula;
-            }
-          });
-        }
-        else {
-          // выполняем модификаторы
-          try {
-            formula.execute();
-          }
-          catch (err) {
-          }
-        }
-      });
-    });
-});
-
 
 $p.CatFormulas.prototype.__define({
 
@@ -3836,23 +3800,22 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
       group: true,
       keys: []
     };
-    this.production.forEach(function (row) {
-      if(!row.characteristic.empty() && !row.nom.is_procedure && !row.nom.is_service && !row.nom.is_accessory) {
-        options.keys.push([row.characteristic.ref, '305e374b-3aa9-11e6-bf30-82cf9717e145', 1, 0]);
+    this.production.forEach(({nom, characteristic}) => {
+      if(!characteristic.empty() && !nom.is_procedure && !nom.is_service && !nom.is_accessory) {
+        options.keys.push([characteristic.ref, '305e374b-3aa9-11e6-bf30-82cf9717e145', 1, 0]);
       }
     });
-
-    return $p.wsql.pouch.remote.doc.query('server/dispatching', options)
-      .then(function (result) {
-        var res = {};
-        result.rows.forEach(function (row) {
-          if(row.value.plan) {
-            row.value.plan = moment(row.value.plan).format('L');
+    return $p.adapters.pouch.remote.doc.query('server/dispatching', options)
+      .then(function ({rows}) {
+        const res = {};
+        rows && rows.forEach(function ({key, value}) {
+          if(value.plan) {
+            value.plan = moment(value.plan).format('L');
           }
-          if(row.value.fact) {
-            row.value.fact = moment(row.value.fact).format('L');
+          if(value.fact) {
+            value.fact = moment(value.fact).format('L');
           }
-          res[row.key[0]] = row.value;
+          res[key[0]] = value;
         });
         return res;
       });
