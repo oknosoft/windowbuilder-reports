@@ -1,5 +1,5 @@
 /*!
- windowbuilder-reports v2.0.237, built:2018-03-21
+ windowbuilder-reports v2.0.237, built:2018-04-03
  © 2014-2018 Evgeniy Malyarov and the Oknosoft team http://www.oknosoft.ru
  To obtain commercial license and technical support, contact info@oknosoft.ru
  */
@@ -28,42 +28,42 @@ var modifiers = function($p) {
 	};
 	Object.defineProperties(_mgr, {
 	  ad: {
-	    get: function () {
+	    get() {
         return this.УгловоеДиагональное;
       }
     },
     av: {
-      get: function () {
+      get() {
         return this.УгловоеКВертикальной;
       }
     },
     ah: {
-      get: function () {
+      get() {
         return this.УгловоеКГоризонтальной;
       }
     },
     t: {
-      get: function () {
+      get() {
         return this.ТОбразное;
       }
     },
     ii: {
-      get: function () {
+      get() {
         return this.Наложение;
       }
     },
     i: {
-      get: function () {
+      get() {
         return this.НезамкнутыйКонтур;
       }
     },
     xt: {
-      get: function () {
+      get() {
         return this.КрестПересечение;
       }
     },
     xx: {
-      get: function () {
+      get() {
         return this.КрестВСтык;
       }
     },
@@ -76,7 +76,7 @@ var modifiers = function($p) {
 	const cache = {};
 	_mgr.__define({
 		profiles: {
-			get : function(){
+			get(){
 				return cache.profiles
 					|| ( cache.profiles = [
 						_mgr.Рама,
@@ -86,7 +86,7 @@ var modifiers = function($p) {
 			}
 		},
 		profile_items: {
-			get : function(){
+			get(){
 				return cache.profile_items
 					|| ( cache.profile_items = [
 						_mgr.Рама,
@@ -100,24 +100,24 @@ var modifiers = function($p) {
 			}
 		},
 		rama_impost: {
-			get : function(){
+			get(){
 				return cache.rama_impost
 					|| ( cache.rama_impost = [ _mgr.Рама, _mgr.Импост] );
 			}
 		},
 		impost_lay: {
-			get : function(){
+			get(){
 				return cache.impost_lay
 					|| ( cache.impost_lay = [ _mgr.Импост, _mgr.Раскладка] );
 			}
 		},
 		stvs: {
-			get : function(){
+			get(){
 				return cache.stvs || ( cache.stvs = [_mgr.Створка] );
 			}
 		},
 		glasses: {
-			get : function(){
+			get(){
 				return cache.glasses
 					|| ( cache.glasses = [ _mgr.Стекло, _mgr.Заполнение] );
 			}
@@ -130,7 +130,7 @@ var modifiers = function($p) {
 (function($p){
 	$p.enm.open_types.__define({
 		is_opening: {
-			value: function (v) {
+			value(v) {
 				if(!v || v.empty() || v == this.Глухое || v == this.Неподвижное)
 					return false;
 				return true;
@@ -139,49 +139,49 @@ var modifiers = function($p) {
 	});
 	$p.enm.orientations.__define({
 		hor: {
-			get: function () {
+			get() {
 				return this.Горизонтальная;
 			}
 		},
 		vert: {
-			get: function () {
+			get() {
 				return this.Вертикальная;
 			}
 		},
 		incline: {
-			get: function () {
+			get() {
 				return this.Наклонная;
 			}
 		}
 	});
 	$p.enm.positions.__define({
 		left: {
-			get: function () {
+			get() {
 				return this.Лев;
 			}
 		},
 		right: {
-			get: function () {
+			get() {
 				return this.Прав;
 			}
 		},
 		top: {
-			get: function () {
+			get() {
 				return this.Верх;
 			}
 		},
 		bottom: {
-			get: function () {
+			get() {
 				return this.Низ;
 			}
 		},
 		hor: {
-			get: function () {
+			get() {
 				return this.ЦентрГоризонталь;
 			}
 		},
 		vert: {
-			get: function () {
+			get() {
 				return this.ЦентрВертикаль;
 			}
 		}
@@ -433,7 +433,7 @@ $p.CatCharacteristics = class CatCharacteristics extends $p.CatCharacteristics {
       return;
     }
     let _modified;
-    if(typeof _obj[name] !== 'string'){
+    if(!_obj[name] || typeof _obj[name] !== 'string'){
       _obj[name] = JSON.stringify($p.CatCharacteristics.builder_props_defaults);
       _modified = true;
     }
@@ -673,7 +673,7 @@ $p.cat.characteristics.form_obj = function (pwnd, attr) {
 })($p);
 $p.cat.clrs.__define({
   by_predefined: {
-    value: function (clr, clr_elm, clr_sch, elm, spec) {
+    value(clr, clr_elm, clr_sch, elm, spec) {
       const {predefined_name} = clr;
       if(predefined_name) {
         switch (predefined_name) {
@@ -718,7 +718,7 @@ $p.cat.clrs.__define({
     }
   },
   inverted: {
-    value: function(clr){
+    value(clr){
       if(clr.clr_in == clr.clr_out || clr.clr_in.empty() || clr.clr_out.empty()){
         return clr;
       }
@@ -728,7 +728,7 @@ $p.cat.clrs.__define({
     }
   },
 	selection_exclude_service: {
-		value: function (mf, sys) {
+		value(mf, sys) {
 			if(mf.choice_params)
 				mf.choice_params.length = 0;
 			else
@@ -782,7 +782,7 @@ $p.cat.clrs.__define({
 		}
 	},
 	form_selection: {
-		value: function (pwnd, attr) {
+		value(pwnd, attr) {
 		  const eclr = this.get();
 			attr.hide_filter = true;
       attr.toolbar_click = function (btn_id, wnd){
@@ -837,7 +837,7 @@ $p.cat.clrs.__define({
 					const tb_filter = wnd.elmnts.filter;
 					tb_filter.__define({
 						get_filter: {
-							value: () => {
+							value() {
 								const res = {
 									selection: []
 								};
@@ -896,7 +896,7 @@ $p.cat.clrs.__define({
 		}
 	},
 	sync_grid: {
-		value: function(attr, grid) {
+		value(attr, grid) {
 			if(attr.action == "get_selection" && attr.selection && attr.selection.some(function (v) {
 				return v.hasOwnProperty("clr_in") || v.hasOwnProperty("clr_out");
 				})){
@@ -935,14 +935,14 @@ $p.cat.cnns.__define({
     value: {}
   },
   sql_selection_list_flds: {
-    value: function(initial_value){
+    value(initial_value){
       return "SELECT _t_.ref, _t_.`_deleted`, _t_.is_folder, _t_.id, _t_.name as presentation, _k_.synonym as cnn_type," +
         " case when _t_.ref = '" + initial_value + "' then 0 else 1 end as is_initial_value FROM cat_cnns AS _t_" +
         " left outer join enm_cnn_types as _k_ on _k_.ref = _t_.cnn_type %3 %4 LIMIT 300";
     }
   },
   nom_cnn: {
-    value: function(nom1, nom2, cnn_types, ign_side, is_outer){
+    value(nom1, nom2, cnn_types, ign_side, is_outer){
       const {ProfileItem, BuilderElement, Filling} = $p.Editor;
       const {Вертикальная} = $p.enm.orientations;
       if(nom1 instanceof ProfileItem && nom2 instanceof ProfileItem &&
@@ -1026,7 +1026,7 @@ $p.cat.cnns.__define({
     }
   },
   elm_cnn: {
-    value: function(elm1, elm2, cnn_types, curr_cnn, ign_side, is_outer){
+    value(elm1, elm2, cnn_types, curr_cnn, ign_side, is_outer){
       if(curr_cnn && cnn_types && (cnn_types.indexOf(curr_cnn.cnn_type) != -1) && (cnn_types != $p.enm.cnn_types.acn.ii)){
         if(!ign_side && curr_cnn.sd1 == $p.enm.cnn_sides.Изнутри){
           if(typeof is_outer == 'boolean'){
@@ -1083,7 +1083,7 @@ $p.cat.cnns.__define({
 });
 $p.CatCnns.prototype.__define({
 	main_row: {
-		value: function (elm) {
+		value(elm) {
 			var ares, nom = elm.nom;
 			if($p.enm.cnn_types.acn.a.indexOf(this.cnn_type) != -1){
 				var art12 = elm.orientation == $p.enm.orientations.Вертикальная ? $p.job_prm.nom.art1 : $p.job_prm.nom.art2;
@@ -1107,7 +1107,7 @@ $p.CatCnns.prototype.__define({
 		}
 	},
 	check_nom2: {
-		value: function (nom) {
+		value(nom) {
 			var ref = $p.utils.is_data_obj(nom) ? nom.ref : nom;
 			return this.cnn_elmnts._obj.some(function (row) {
 				return row.nom == ref;
@@ -1117,7 +1117,7 @@ $p.CatCnns.prototype.__define({
 });
 $p.cat.contracts.__define({
 	sql_selection_list_flds: {
-		value: function(initial_value){
+		value(initial_value){
 			return "SELECT _t_.ref, _t_.`_deleted`, _t_.is_folder, _t_.id, _t_.name as presentation, _k_.synonym as contract_kind, _m_.synonym as mutual_settlements, _o_.name as organization, _p_.name as partner," +
 				" case when _t_.ref = '" + initial_value + "' then 0 else 1 end as is_initial_value FROM cat_contracts AS _t_" +
 				" left outer join cat_organizations as _o_ on _o_.ref = _t_.organization" +
@@ -1127,7 +1127,7 @@ $p.cat.contracts.__define({
 		}
 	},
 	by_partner_and_org: {
-    value: function (partner, organization, contract_kind = $p.enm.contract_kinds.СПокупателем) {
+    value(partner, organization, contract_kind = $p.enm.contract_kinds.СПокупателем) {
       const {main_contract} = $p.cat.partners.get(partner);
       if(main_contract && main_contract.contract_kind == contract_kind && main_contract.organization == organization){
         return main_contract;
@@ -1140,7 +1140,7 @@ $p.cat.contracts.__define({
 });
 Object.defineProperties($p.cat.divisions, {
   get_option_list: {
-    value: function (selection, val) {
+    value(selection, val) {
       const list = [];
       $p.current_user.acl_objs.find_rows({type: "cat.divisions"}, ({acl_obj}) => {
         if(acl_obj && list.indexOf(acl_obj) == -1){
@@ -1173,7 +1173,7 @@ Object.defineProperties($p.cat.divisions, {
 });
 $p.CatElm_visualization.prototype.__define({
 	draw: {
-		value: function (elm, layer, offset) {
+		value(elm, layer, offset) {
 		  const {CompoundPath, constructor} = elm.project._scope;
 			let subpath;
 			if(this.svg_path.indexOf('{"method":') == 0){
@@ -1230,7 +1230,7 @@ $p.CatElm_visualization.prototype.__define({
 });
 $p.CatFormulas.prototype.__define({
 	execute: {
-		value: function (obj, attr) {
+		value(obj, attr) {
 			if(!this._data._formula && this.formula){
 			  try{
           if(this.async){
@@ -1265,7 +1265,7 @@ $p.CatFormulas.prototype.__define({
 		}
 	},
 	_template: {
-		get: function () {
+		get() {
 			if(!this._data._template){
         this._data._template = new $p.SpreadsheetDocument(this.template);
       }
@@ -1275,14 +1275,14 @@ $p.CatFormulas.prototype.__define({
 });
 Object.defineProperties($p.cat.furns, {
   sql_selection_list_flds: {
-    value: function(initial_value){
+    value(initial_value){
       return "SELECT _t_.ref, _t_.`_deleted`, _t_.is_folder, _t_.parent, case when _t_.is_folder then '' else _t_.id end as id, _t_.name as presentation, _k_.synonym as open_type, \
 					 case when _t_.ref = '" + initial_value + "' then 0 else 1 end as is_initial_value FROM cat_furns AS _t_ \
 					 left outer join enm_open_types as _k_ on _k_.ref = _t_.open_type %3 %4 LIMIT 300";
     }
   },
   get_option_list: {
-    value: function (selection, val) {
+    value(selection, val) {
       const {characteristic, sys} = paper.project._dp;
       const {furn} = $p.job_prm.properties;
       if(furn && sys && !sys.empty()){
@@ -1565,17 +1565,19 @@ $p.cat.inserts.__define({
 		]
 	},
   _prms_by_type: {
-	  value: function (insert_type) {
+	  value(insert_type) {
       const prms = new Set();
       this.find_rows({available: true, insert_type}, (inset) => {
         inset.used_params.forEach((param) => {
           !param.is_calculated && prms.add(param);
         });
         inset.specification.forEach(({nom}) => {
-          const {used_params} = nom;
-          used_params && used_params.forEach((param) => {
-            !param.is_calculated && prms.add(param);
-          });
+          if(nom){
+            const {used_params} = nom;
+            used_params && used_params.forEach((param) => {
+              !param.is_calculated && prms.add(param);
+            });
+          }
         });
       });
       return prms;
@@ -1606,10 +1608,12 @@ $p.cat.inserts.__define({
               !param.is_calculated && prms.add(param);
             });
             inset.specification.forEach(({nom}) => {
-              const {used_params} = nom;
-              used_params && used_params.forEach((param) => {
-                !param.is_calculated && prms.add(param);
-              });
+              if(nom){
+                const {used_params} = nom;
+                used_params && used_params.forEach((param) => {
+                  !param.is_calculated && prms.add(param);
+                });
+              }
             });
             mf.read_only = !prms.has(prm);
             const links = prm.params_links({grid: {selection: {}}, obj: this});
@@ -1653,12 +1657,12 @@ $p.cat.inserts.__define({
             mf.choice_params = [{name: 'owner', path: param}];
           }
           Object.defineProperty(ItemRow.prototype, param.ref, {
-            get: function () {
+            get() {
               const {product_params} = this._owner._owner;
               const row = product_params.find({elm: this.row, param}) || product_params.add({elm: this.row, param});
               return row.value;
             },
-            set: function (v) {
+            set(v) {
               const {product_params} = this._owner._owner;
               const row = product_params.find({elm: this.row, param}) || product_params.add({elm: this.row, param});
               row.value = v;
@@ -1682,7 +1686,7 @@ $p.cat.inserts.__define({
     }
   },
 	by_thickness: {
-		value: function (min, max) {
+		value(min, max) {
 			if(!this._by_thickness){
 				this._by_thickness = {};
 				this.find_rows({insert_type: {in: this._inserts_types_filling}}, (ins) => {
@@ -1702,7 +1706,7 @@ $p.cat.inserts.__define({
 		}
 	},
   sql_selection_list_flds: {
-	  value: function (initial_value) {
+	  value(initial_value) {
       return "SELECT _t_.ref, _t_.`_deleted`, _t_.is_folder, _t_.id, _t_.name as presentation, _k_.synonym as insert_type," +
         " case when _t_.ref = '" + initial_value + "' then 0 else 1 end as is_initial_value FROM cat_inserts AS _t_" +
         " left outer join enm_inserts_types as _k_ on _k_.ref = _t_.insert_type %3 %4 LIMIT 300";
@@ -2094,7 +2098,7 @@ $p.CatInserts = class CatInserts extends $p.CatInserts {
 };
 $p.cat.insert_bind.__define({
   insets: {
-    value: function (ox) {
+    value(ox) {
       const {sys, owner} = ox;
       const res = [];
       this.forEach((o) => {
@@ -2115,7 +2119,7 @@ $p.cat.insert_bind.__define({
 });
 $p.cat.nom.__define({
 	sql_selection_list_flds: {
-		value: function(initial_value){
+		value(initial_value){
 			return "SELECT _t_.ref, _t_.`_deleted`, _t_.is_folder, _t_.id, _t_.article, _t_.name as presentation, _u_.name as nom_unit, _k_.name as nom_kind, _t_.thickness," +
 				" case when _t_.ref = '" + initial_value + "' then 0 else 1 end as is_initial_value FROM cat_nom AS _t_" +
 				" left outer join cat_units as _u_ on _u_.ref = _t_.base_unit" +
@@ -2123,14 +2127,14 @@ $p.cat.nom.__define({
 		}
 	},
 	sql_selection_where_flds: {
-		value: function(filter){
+		value(filter){
 			return " OR _t_.article LIKE '" + filter + "' OR _t_.id LIKE '" + filter + "' OR _t_.name LIKE '" + filter + "'";
 		}
 	}
 });
 $p.CatNom.prototype.__define({
 	_price: {
-		value: function (attr) {
+		value(attr) {
       let price = 0, currency, start_date = $p.utils.blank.date;
 			if(!attr){
         attr = {};
@@ -2231,7 +2235,7 @@ $p.CatNom.prototype.__define({
 		}
 	},
   grouping: {
-	  get: function () {
+	  get() {
       if(!this.hasOwnProperty('_grouping')){
         this.extra_fields.find_rows({property: $p.job_prm.properties.grouping}, (row) => {
           this._grouping = row.value.name;
@@ -2241,14 +2245,14 @@ $p.CatNom.prototype.__define({
     }
   },
   presentation: {
-    get : function(){
+    get(){
       return this.name + (this.article ? ' ' + this.article : '');
     },
-    set : function(v){
+    set(v){
     }
   },
   by_clr_key: {
-    value: function (clr) {
+    value(clr) {
       if(this.clr == clr){
         return this;
       }
@@ -2286,14 +2290,14 @@ $p.CatNom.prototype.__define({
 });
 $p.cat.partners.__define({
 	sql_selection_where_flds: {
-		value: function(filter){
+		value(filter){
 			return " OR inn LIKE '" + filter + "' OR name_full LIKE '" + filter + "' OR name LIKE '" + filter + "'";
 		}
 	}
 });
 $p.CatPartners.prototype.__define({
 	addr: {
-		get: function () {
+		get() {
 			return this.contact_information._obj.reduce(function (val, row) {
 				if(row.kind == $p.cat.contact_information_kinds.predefined("ЮрАдресКонтрагента") && row.presentation)
 					return row.presentation;
@@ -2308,7 +2312,7 @@ $p.CatPartners.prototype.__define({
 		}
 	},
 	phone: {
-		get: function () {
+		get() {
 			return this.contact_information._obj.reduce(function (val, row) {
 				if(row.kind == $p.cat.contact_information_kinds.predefined("ТелефонКонтрагента") && row.presentation)
 					return row.presentation;
@@ -2320,18 +2324,21 @@ $p.CatPartners.prototype.__define({
 		}
 	},
 	long_presentation: {
-		get: function () {
-			var res = this.name_full || this.name,
-				addr = this.addr,
-				phone = this.phone;
-			if(this.inn)
-				res+= ", ИНН" + this.inn;
-			if(this.kpp)
-				res+= ", КПП" + this.kpp;
-			if(addr)
-				res+= ", " + addr;
-			if(phone)
-				res+= ", " + phone;
+		get() {
+		  const {addr, phone, inn, kpp} = this;
+			let res = this.name_full || this.name;
+			if(inn){
+        res+= ", ИНН" + inn;
+      }
+			if(kpp){
+        res+= ", КПП" + kpp;
+      }
+			if(addr){
+        res+= ", " + addr;
+      }
+			if(phone){
+        res+= ", " + phone;
+      }
 			return res;
 		}
 	}
@@ -2363,7 +2370,7 @@ $p.cat.production_params.__define({
 });
 $p.CatProduction_params.prototype.__define({
 	noms: {
-		get: function(){
+		get(){
 			var __noms = [];
 			this.elmnts._obj.forEach(function(row){
 				if(!$p.utils.is_empty_guid(row.nom) && __noms.indexOf(row.nom) == -1)
@@ -2373,7 +2380,7 @@ $p.CatProduction_params.prototype.__define({
 		}
 	},
 	inserts: {
-		value: function(elm_types, by_default){
+		value(elm_types, by_default){
 			var __noms = [];
 			if(!elm_types)
 				elm_types = $p.enm.elm_types.rama_impost;
@@ -2409,7 +2416,7 @@ $p.CatProduction_params.prototype.__define({
 		}
 	},
 	refill_prm: {
-		value: function (ox, cnstr = 0) {
+		value(ox, cnstr = 0) {
 			const prm_ts = !cnstr ? this.product_params : this.furn_params;
 			const adel = [];
 			const auto_align = ox.calc_order.obj_delivery_state == $p.enm.obj_delivery_states.Шаблон && $p.job_prm.properties.auto_align;
@@ -2492,14 +2499,25 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
     }
     if(this.obj_delivery_state == Шаблон) {
       this.department = $p.utils.blank.guid;
+      this.partner = $p.utils.blank.guid;
     }
-    else if(this.department.empty()) {
-      $p.msg.show_msg && $p.msg.show_msg({
-        type: 'alert-warning',
-        text: 'Не заполнен реквизит "офис продаж" (подразделение)',
-        title: this.presentation
-      });
-      return false;
+    else {
+      if(this.department.empty()) {
+        $p.msg.show_msg && $p.msg.show_msg({
+          type: 'alert-warning',
+          text: 'Не заполнен реквизит "офис продаж" (подразделение)',
+          title: this.presentation
+        });
+        return false;
+      }
+      if(this.partner.empty()) {
+        $p.msg.show_msg && $p.msg.show_msg({
+          type: 'alert-warning',
+          text: 'Не указан контрагент (дилер)',
+          title: this.presentation
+        });
+        return false;
+      }
     }
     this.production.forEach((row) => {
       doc_amount += row.amount;
@@ -3394,7 +3412,7 @@ var cch_predefined_elmnts = function ($p) {
   delete $p.CchPredefined_elmnts.prototype.value;
   $p.CchPredefined_elmnts.prototype.__define({
     value: {
-      get: function () {
+      get () {
         const mf = this.type;
         const res = this._obj ? this._obj.value : '';
         if(this._obj.is_folder) {
@@ -3438,7 +3456,7 @@ var cch_predefined_elmnts = function ($p) {
         }
         return this.characteristic.clr;
       },
-      set: function (v) {
+      set(v) {
         if(this._obj.value === v) {
           return;
         }
@@ -3453,7 +3471,7 @@ var cch_predefined_elmnts = function ($p) {
 var cch_properties = function ($p) {
   $p.cch.properties.__define({
     check_mandatory: {
-      value: function (prms, title) {
+      value(prms, title) {
         var t, row;
         for (t in prms) {
           row = prms[t];
@@ -3469,7 +3487,7 @@ var cch_properties = function ($p) {
       }
     },
     slist: {
-      value: function (prop, ret_mgr) {
+      value(prop, ret_mgr) {
         var res = [], rt, at, pmgr, op = this.get(prop);
         if(op && op.type.is_ref) {
           for (rt in op.type.types)
@@ -3504,12 +3522,12 @@ var cch_properties = function ($p) {
   });
   $p.CchProperties.prototype.__define({
     is_calculated: {
-      get: function () {
+      get() {
         return ($p.job_prm.properties.calculated || []).indexOf(this) != -1;
       }
     },
     calculated_value: {
-      value: function (obj) {
+      value(obj) {
         if(!this._calculated_value) {
           if(this._formula) {
             this._calculated_value = $p.cat.formulas.get(this._formula);
@@ -3522,7 +3540,7 @@ var cch_properties = function ($p) {
       }
     },
     check_condition: {
-      value: function ({row_spec, prm_row, elm, cnstr, origin, ox, calc_order}) {
+      value({row_spec, prm_row, elm, cnstr, origin, ox, calc_order}) {
         const {is_calculated} = this;
         const {utils, enm: {comparison_types}} = $p;
         const val = is_calculated ? this.calculated_value({
@@ -3567,7 +3585,7 @@ var cch_properties = function ($p) {
       }
     },
     extract_value: {
-      value: function ({comparison_type, txt_row, value}) {
+      value({comparison_type, txt_row, value}) {
         switch (comparison_type) {
         case $p.enm.comparison_types.in:
         case $p.enm.comparison_types.nin:
@@ -3592,7 +3610,7 @@ var cch_properties = function ($p) {
       }
     },
     params_links: {
-      value: function (attr) {
+      value(attr) {
         if(!this.hasOwnProperty('_params_links')) {
           this._params_links = $p.cat.params_links.find_rows({slave: this});
         }
@@ -3614,7 +3632,7 @@ var cch_properties = function ($p) {
       }
     },
     linked_values: {
-      value: function (links, prow) {
+      value(links, prow) {
         const values = [];
         let changed;
         links.forEach((link) => link.values.forEach((row) => values.push(row)));
@@ -3643,7 +3661,7 @@ var cch_properties = function ($p) {
       }
     },
     filter_params_links: {
-      value: function (filter, attr, links) {
+      value(filter, attr, links) {
         if(!links) {
           links = this.params_links(attr);
         }
@@ -3692,7 +3710,8 @@ var i18ru = function ($p) {
     bld_not_sys: 'Не указана система профилей',
     bld_from_blocks_title: 'Выбор типового блока',
     bld_from_blocks: 'Текущее изделие будет заменено конфигурацией типового блока. Продолжить?',
-    bld_split_imp: 'В параметрах продукции<br />\'%1\'<br />запрещены незамкнутые контуры<br />Для включения деления импостом,<br />установите это свойство в \'Истина\'',
+    bld_split_imp: 'В параметрах продукции<br />\'%1\'<br />запрещены незамкнутые контуры<br />Для включения деления импостом,' +
+    '<br />установите это свойство в \'Истина\'',
     bld_new_stv: 'Добавить створку',
     bld_new_stv_no_filling: 'Перед добавлением створки, укажите заполнение,<br />в которое поместить створку',
     bld_arc: 'Радиус сегмента профиля',
@@ -7542,14 +7561,14 @@ class Magnetism {
 }
 Object.defineProperties(paper$1.Path.prototype, {
   getDirectedAngle: {
-    value: function (point) {
+    value(point) {
       const np = this.getNearestPoint(point),
         offset = this.getOffsetOf(np);
       return this.getTangentAt(offset).getDirectedAngle(point.add(np.negate()));
     }
   },
   is_self_intersected: {
-    value: function () {
+    value() {
       const {curves} = this;
       return curves.some((crv1, i1) => {
         return curves.some((crv2, i2) => {
@@ -7589,7 +7608,7 @@ Object.defineProperties(paper$1.Path.prototype, {
       enumerable : false
     },
   is_linear: {
-      value: function () {
+      value() {
         if(this.curves.length == 1 && this.firstCurve.isLinear())
           return true;
         else if(this.hasHandles())
@@ -7607,12 +7626,12 @@ Object.defineProperties(paper$1.Path.prototype, {
       }
     },
   is_nearest: {
-    value: function (point, sticking) {
+    value(point, sticking) {
       return point.is_nearest(this.getNearestPoint(point), sticking);
     }
   },
   get_subpath: {
-      value: function (point1, point2) {
+      value(point1, point2) {
         let tmp;
         if(!this.length || (point1.is_nearest(this.firstSegment.point) && point2.is_nearest(this.lastSegment.point))){
           tmp = this.clone(false);
@@ -7661,7 +7680,7 @@ Object.defineProperties(paper$1.Path.prototype, {
       }
     },
   equidistant: {
-      value: function (delta, elong) {
+      value(delta, elong) {
         let normal = this.getNormalAt(0);
         const res = new paper$1.Path({
             segments: [this.firstSegment.point.add(normal.multiply(delta))],
@@ -7699,7 +7718,7 @@ Object.defineProperties(paper$1.Path.prototype, {
       }
     },
   elongation: {
-      value: function (delta) {
+      value(delta) {
         if(delta){
           if(this.is_linear()) {
             let tangent = this.getTangentAt(0);
@@ -7717,7 +7736,7 @@ Object.defineProperties(paper$1.Path.prototype, {
       }
     },
   intersect_point: {
-      value: function (path, point, elongate) {
+      value(path, point, elongate) {
         const intersections = this.getIntersections(path);
         let delta = Infinity, tdelta, tpoint;
         if(intersections.length == 1){
@@ -7764,7 +7783,7 @@ Object.defineProperties(paper$1.Path.prototype, {
       }
     },
   point_pos: {
-    value: function (point, interior) {
+    value(point, interior) {
       const np = this.getNearestPoint(interior);
       const offset = this.getOffsetOf(np);
       const line = new paper$1.Line(np, np.add(this.getTangentAt(offset)));
@@ -7772,7 +7791,7 @@ Object.defineProperties(paper$1.Path.prototype, {
     }
   },
   rmin: {
-    value: function() {
+    value() {
       if(!this.hasHandles()){
         return 0;
       }
@@ -7788,7 +7807,7 @@ Object.defineProperties(paper$1.Path.prototype, {
     }
   },
   rmax: {
-    value: function() {
+    value() {
       if(!this.hasHandles()){
         return 0;
       }
@@ -7806,7 +7825,7 @@ Object.defineProperties(paper$1.Path.prototype, {
 });
 Object.defineProperties(paper$1.Point.prototype, {
 	is_nearest: {
-		value: function (point, sticking) {
+		value(point, sticking) {
 		  if(sticking === 0){
         return Math.abs(this.x - point.x) < consts.epsilon && Math.abs(this.y - point.y) < consts.epsilon;
       }
@@ -7814,7 +7833,7 @@ Object.defineProperties(paper$1.Point.prototype, {
 		}
 	},
 	point_pos: {
-		value: function(x1,y1, x2,y2){
+		value(x1,y1, x2,y2){
 			if (Math.abs(x1-x2) < 0.2){
 				return (this.x-x1)*(y1-y2);
 			}
@@ -7825,7 +7844,7 @@ Object.defineProperties(paper$1.Point.prototype, {
 		}
 	},
 	arc_cntr: {
-		value: function(x1,y1, x2,y2, r0, ccw){
+		value(x1,y1, x2,y2, r0, ccw){
 			var a,b,p,r,q,yy1,xx1,yy2,xx2;
 			if(ccw){
 				var tmpx=x1, tmpy=y1;
@@ -7859,7 +7878,7 @@ Object.defineProperties(paper$1.Point.prototype, {
 		}
 	},
 	arc_point: {
-		value: function(x1,y1, x2,y2, r, arc_ccw, more_180){
+		value(x1,y1, x2,y2, r, arc_ccw, more_180){
 			const point = {x: (x1 + x2) / 2, y: (y1 + y2) / 2};
 			if (r>0){
 				let dx = x1-x2, dy = y1-y2, dr = r*r-(dx*dx+dy*dy)/4, l, h, centr;
@@ -7880,7 +7899,7 @@ Object.defineProperties(paper$1.Point.prototype, {
 		}
 	},
   arc_r: {
-	  value: function (x1,y1,x2,y2,h) {
+	  value(x1,y1,x2,y2,h) {
       if (!h){
         return 0;
       }
@@ -7889,7 +7908,7 @@ Object.defineProperties(paper$1.Point.prototype, {
     }
   },
 	snap_to_angle: {
-		value: function(snapAngle) {
+		value(snapAngle) {
 			if(!snapAngle){
         snapAngle = Math.PI*2/8;
       }
@@ -7902,7 +7921,7 @@ Object.defineProperties(paper$1.Point.prototype, {
 		}
 	},
   bind_to_nodes: {
-	  value: function (sticking) {
+	  value(sticking) {
       return paper$1.project.activeLayer.nodes.some((point) => {
         if(point.is_nearest(this, sticking)){
           this.x = point.x;
@@ -8741,7 +8760,23 @@ class ProfileItem extends GeneratrixElement {
     const {cnn_type} = cnn_point.cnn || {};
     const {cnn_types} = $p.enm;
     if(cnn_point.is_t || (cnn_type == cnn_types.xx && !cnn_point.profile_point)) {
-      !cnn_point.profile.path.segments.length && cnn_point.profile.redraw();
+      if(!cnn_point.profile.path.segments.length) {
+        const {_attr, row} = cnn_point.profile;
+        if(_attr.force_redraw) {
+          if(cnn_point.profile.row.path_data) {
+            cnn_point.profile.path.pathData = cnn_point.profile.row.path_data;
+            _attr.force_redraw = false;
+          }
+          else {
+            throw new Error('cycle redraw');
+          }
+        }
+        else {
+          _attr.force_redraw = true;
+          cnn_point.profile.redraw();
+          _attr.force_redraw = false;
+        }
+      }
       const nodes = new Set();
       let profile2;
       cnn_point.point && !(this instanceof Onlay) && this.layer.profiles.forEach((profile) => {
@@ -10081,8 +10116,9 @@ class Scheme extends paper$1.Project {
       }
     };
     this.magnetism = new Magnetism(this);
-    this.redraw = (from_service) => {
-      _attr._opened && !from_service && requestAnimationFrame(_scheme.redraw);
+    this.redraw = () => {
+      const isBrowser = typeof requestAnimationFrame === 'function';
+      _attr._opened && isBrowser && requestAnimationFrame(_scheme.redraw);
       if(!_attr._opened || _attr._saving || !_changes.length) {
         return;
       }
@@ -10090,10 +10126,10 @@ class Scheme extends paper$1.Project {
       const {contours} = _scheme;
       if(contours.length) {
         _scheme.l_connective.redraw();
-        !from_service && contours[0].refresh_prm_links(true);
+        isBrowser && contours[0].refresh_prm_links(true);
         for (let contour of contours) {
           contour.redraw();
-          if(_changes.length && !from_service) {
+          if(_changes.length) {
             return;
           }
         }
@@ -10101,7 +10137,7 @@ class Scheme extends paper$1.Project {
         contours.forEach(({contours, l_dimensions}) => {
           contours.forEach((l) => {
             l.save_coordinates(true);
-            !from_service && l.refresh_prm_links();
+            isBrowser && l.refresh_prm_links();
           });
           l_dimensions.redraw();
         });
@@ -11256,19 +11292,25 @@ class Pricing {
           return !loc && this.by_range();
         })
         .then(() => {
-          $p$$1.adapters.pouch.emit('pouch_complete_loaded');
-          $p$$1.doc.nom_prices_setup.pouch_db.changes({
-            since: 'now',
-            live: true,
-            include_docs: true,
-            selector: {class_name: {$in: ['doc.nom_prices_setup', 'cat.formulas']}}
-          }).on('change', (change) => {
-            if(change.doc.class_name == 'doc.nom_prices_setup'){
-              setTimeout(() => {
-                this.by_doc(change.doc);
-              }, 1000);
-            }
-          });
+          const {pouch} = $p$$1.adapters;
+          pouch.emit('pouch_complete_loaded');
+          if(pouch.local.doc === pouch.remote.doc) {
+            pouch.local.doc.changes({
+              since: 'now',
+              live: true,
+              include_docs: true,
+              selector: {class_name: {$in: ['doc.nom_prices_setup', 'doc.calc_order', 'cat.formulas']}}
+            }).on('change', (change) => {
+              if(change.doc.class_name == 'doc.nom_prices_setup'){
+                setTimeout(() => {
+                  this.by_doc(change.doc);
+                }, 1000);
+              }
+              else if(change.doc.class_name == 'doc.calc_order'){
+                pouch.load_changes({docs: [change.doc], update_only: true});
+              }
+            });
+          }
         });
     });
   }
