@@ -11,7 +11,7 @@ app.use(cors({credentials: true, maxAge: 600}));
 import rep from './router';
 app.use(rep.middleware());
 
-app.listen(process.env.PORT || 3000);
+app.listen(process.env.PORT || 3030);
 app.restrict_ips = process.env.IPS ? process.env.IPS.split(',') : [];
 
 export default app;

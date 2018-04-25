@@ -4,21 +4,12 @@ Contour.prototype.refresh_links = function () {
 
 }
 
-delete Scheme.prototype.zoom_fit;
-Scheme.prototype.zoom_fit = function () {
-  Contour.prototype.zoom_fit.call(this);
-}
-
-function snake_ref(ref) {
-  return '_' + ref.replace(/-/g, '_');
-}
-
 // формирует структуру с эскизами заполнений
 async function glasses({project, view, prod, res}) {
   for(const ox of prod){
 
     const {_obj: {glasses, coordinates}, name} = ox;
-    const ref = snake_ref(ox.ref);
+    const ref = $p.utils.snake_ref(ox.ref);
     res[ref] = {
       glasses: glasses,
       imgs: {},
@@ -65,7 +56,7 @@ async function prod(ctx, next) {
       // ctx.body = return view.element.toBuffer();
 
       const {_obj} = ox;
-      const ref = snake_ref(ox.ref);
+      const ref = $p.utils.snake_ref(ox.ref);
       res[ref] = {
         constructions: _obj.constructions || [],
         coordinates: _obj.coordinates || [],
@@ -87,11 +78,11 @@ async function prod(ctx, next) {
 
       if(_obj.coordinates && _obj.coordinates.length){
 
-        await project.load(ox, true);
-        await Promise.resolve().then(() => {
-          res[ref].imgs = {
-            'l0': view.element.toBuffer().toString('base64')
-          };
+        await project.load(ox, true)
+          .then(() => {
+            res[ref].imgs = {
+              'l0': view.element.toBuffer().toString('base64')
+            };
 
         ox.constructions.forEach(({cnstr}) => {
           project.draw_fragment({elm: -cnstr});
@@ -224,6 +215,8 @@ export default async (ctx, next) => {
   //   return;
   // }
 
+  console.log(ctx.params);
+
   try{
     switch (ctx.params.class){
       case 'doc.calc_order':
@@ -239,7 +232,7 @@ export default async (ctx, next) => {
   catch(err){
     ctx.status = 500;
     ctx.body = err.stack;
-    debug(err);
+    console.log(err);
   }
 
 };

@@ -400,7 +400,7 @@ $p.CatCharacteristics = class CatCharacteristics extends $p.CatCharacteristics {
     });
 
     inset.used_params.forEach((param) => {
-      if(params.indexOf(param) == -1) {
+      if(!param.is_calculated && params.indexOf(param) == -1) {
         ts_params.add({
           cnstr: cnstr,
           inset: blank_inset || inset,
@@ -672,6 +672,120 @@ $p.CatCharacteristics = class CatCharacteristics extends $p.CatCharacteristics {
     }
   }
 
+  /**
+   * Пересчитывает изделие по тем же правилам, что и визуальная рисовалка
+   * @param attr
+   * @param editor
+   */
+  recalc(attr = {}, editor) {
+
+    // сначала, получаем объект заказа и продукции заказа в озу, т.к. пересчет изделия может приводить к пересчету соседних продукций
+
+    // загружаем изделие в редактор
+    const remove = !editor;
+    if(remove) {
+      editor = new $p.EditorInvisible();
+    }
+    const project = editor.create_scheme();
+    return project.load(this, true)
+      .then(() => {
+
+        // выполняем пересчет
+        project.save_coordinates({save: true, svg: false});
+
+      })
+      .then(() => {
+        project.ox = '';
+        if(remove) {
+          editor.unload();
+        }
+        else {
+          project.unload();
+        }
+        return this;
+      });
+
+  }
+
+  /**
+   * Рисует изделие или фрагмент изделия в Buffer в соответствии с параметрами attr
+   * @param attr
+   * @param editor
+   */
+  draw(attr = {}, editor) {
+
+    const ref = $p.utils.snake_ref(this.ref);
+    const res = attr.res || {};
+    res[ref] = {imgs: {}};
+
+    // загружаем изделие в редактор
+    const remove = !editor;
+    if(remove) {
+      editor = new $p.EditorInvisible();
+    }
+    const project = editor.create_scheme();
+    return project.load(this, true)
+      .then(() => {
+        const {_obj: {glasses, constructions, coordinates}} = this;
+        // формируем эскиз(ы) в соответствии с attr
+        if(attr.elm) {
+          project.draw_fragment({elm: attr.elm});
+          const num = attr.elm > 0 ? `g${attr.elm}` : `l${attr.elm}`;
+          if(attr.format === 'png') {
+            res[ref].imgs[num] = project.view.element.toDataURL('image/png').substr(22);
+          }
+          else {
+            res[ref].imgs[num] = project.get_svg(attr);
+          }
+        }
+        else if(attr.glasses) {
+          res[ref].glasses = glasses.map((glass) => Object.assign({}, glass));
+          res[ref].glasses.forEach((row) => {
+            const glass = project.draw_fragment({elm: row.elm});
+            // подтянем формулу стеклопакета
+            if(attr.format === 'png') {
+              res[ref].imgs[`g${row.elm}`] = project.view.element.toDataURL('image/png').substr(22);
+            }
+            else {
+              res[ref].imgs[`g${row.elm}`] = project.get_svg(attr);
+            }
+            if(glass){
+              row.formula_long = glass.formula(true);
+              glass.visible = false;
+            }
+          });
+          return res;
+        }
+        else {
+          if(attr.format === 'png') {
+            res[ref].imgs[`l0`] = project.view.element.toDataURL('image/png').substr(22);
+          }
+          else {
+            res[ref].imgs[`l0`] = project.get_svg(attr);
+          }
+          constructions.forEach(({cnstr}) => {
+            project.draw_fragment({elm: -cnstr});
+            if(attr.format === 'png') {
+              res[ref].imgs[`l${cnstr}`] = project.view.element.toDataURL('image/png').substr(22);
+            }
+            else {
+              res[ref].imgs[`l${cnstr}`] = project.get_svg(attr);
+            }
+          });
+        }
+      })
+      .then((res) => {
+        project.ox = '';
+        if(remove) {
+          editor.unload();
+        }
+        else {
+          project.unload();
+        }
+        return res;
+      });
+  }
+
 };
 
 $p.CatCharacteristics.builder_props_defaults = {
@@ -686,14 +800,33 @@ $p.CatCharacteristics.builder_props_defaults = {
 $p.CatCharacteristicsInsertsRow.prototype.value_change = function (field, type, value) {
   // для вложенных вставок перезаполняем параметры
   if(field == 'inset') {
-    if(value != this.inset){
+    if (value != this.inset) {
       const {_owner} = this._owner;
+      const {cnstr} = this;
+
+      //Проверяем дубли вставок (их не должно быть, иначе параметры перезаписываются)
+      if (value != $p.utils.blank.guid) {
+        const res = _owner.params.find_rows({cnstr, inset: value, row: {not: this.row}});
+        if (res.length) {
+          $p.md.emit('alert', {
+            obj: _owner,
+            row: this,
+            title: $p.msg.data_error,
+            type: 'alert-error',
+            text: 'Нельзя добавлять две одинаковые вставки в один контур'
+          });
+          return false;
+        }
+      }
+
       // удаляем параметры старой вставки
-      !this.inset.empty() && _owner.params.clear({inset: this.inset, cnstr: this.cnstr});
+      !this.inset.empty() && _owner.params.clear({inset: this.inset, cnstr});
+
       // устанавливаем значение новой вставки
       this._obj.inset = value;
+
       // заполняем параметры по умолчанию
-      _owner.add_inset_params(this.inset, this.cnstr);
+      _owner.add_inset_params(this.inset, cnstr);
     }
   }
 }
@@ -1395,7 +1528,7 @@ $p.cat.cnns.__define({
         }
       }
 
-      const ref1 = nom1.ref;
+      const ref1 = nom1.ref; // ref у BuilderElement равен ref номенклатуры или ref вставки
       const ref2 = onom2.ref;
 
       if(!is_i){
@@ -1680,7 +1813,8 @@ Object.defineProperties($p.cat.divisions, {
         return 0;
       })
       return Promise.resolve(l);
-    }
+    },
+    writable: true
   }
 });
 
@@ -1977,11 +2111,12 @@ $p.CatFurns = class CatFurns extends $p.CatFurns {
 
     });
 
-    // удаляем лишние строки
+    // удаляем лишние строки, сохраняя параметры допвставок
     const adel = [];
-    fprms.find_rows({cnstr: cnstr}, (row) => {
-      if(aprm.indexOf(row.param) == -1)
+    fprms.find_rows({cnstr: cnstr, inset: $p.utils.blank.guid}, (row) => {
+      if(aprm.indexOf(row.param) == -1){
         adel.push(row);
+      }
     });
     adel.forEach((row) => fprms.del(row, true));
 
@@ -2983,6 +3118,11 @@ $p.CatInserts = class CatInserts extends $p.CatInserts {
         res.push(param)
       }
     });
+    this.product_params.forEach(({param}) => {
+      if(!param.empty() && res.indexOf(param) == -1){
+        res.push(param)
+      }
+    });
     return res;
   }
 
@@ -3392,14 +3532,39 @@ $p.CatProduction_params.prototype.__define({
 	 */
 	noms: {
 		get(){
-			var __noms = [];
-			this.elmnts._obj.forEach(function(row){
-				if(!$p.utils.is_empty_guid(row.nom) && __noms.indexOf(row.nom) == -1)
-					__noms.push(row.nom);
-			});
-			return __noms;
+			const noms = [];
+			this.elmnts._obj.forEach(({nom}) => !$p.utils.is_empty_guid(nom) && noms.indexOf(nom) == -1 && noms.push(nom));
+			return noms;
 		}
 	},
+
+  /**
+   * возвращает доступные в данной системе фурнитуры
+   * данные получает из справчоника СвязиПараметров, где ведущий = текущей системе и ведомый = фурнитура
+   * @property furns
+   * @for Production_params
+   */
+  furns: {
+    value(ox){
+      const {furn} = $p.job_prm.properties;
+      const {furns} = $p.cat;
+      const list = [];
+      if(furn){
+        const links = furn.params_links({
+          grid: {selection: {cnstr: 0}},
+          obj: {_owner: {_owner: ox}}
+        });
+        if(links.length){
+          // собираем все доступные значения в одном массиве
+          links.forEach((link) => link.values._obj.forEach(({value, by_default, forcibly}) => {
+            const v = furns.get(value);
+            v && list.push({furn: v, by_default, forcibly});
+          }));
+        }
+      }
+      return list;
+    }
+  },
 
 	/**
 	 * возвращает доступные в данной системе элементы (вставки)
@@ -3514,8 +3679,52 @@ $p.CatProduction_params.prototype.__define({
 				ox.sys = this;
 				ox.owner = ox.prod_nom;
 
+				// если текущая фурнитура недоступна для данной системы - меняем
+        const furns = this.furns(ox);
+
 				// одновременно, перезаполним параметры фурнитуры
-				ox.constructions.forEach((row) => !row.furn.empty() && ox.sys.refill_prm(ox, row.cnstr))
+				ox.constructions.forEach((row) => {
+          if(!row.furn.empty()) {
+            let changed;
+            // если для системы через связи параметров ограничен список фурнитуры...
+            if(furns.length) {
+              if(furns.some((frow) => {
+                if(frow.forcibly) {
+                  row.furn = frow.furn;
+                  return changed = true;
+                }
+              })) {
+                ;
+              }
+              else if(furns.some((frow) => row.furn === frow.furn)) {
+                ;
+              }
+              else if(furns.some((frow) => {
+                if(frow.by_default) {
+                  row.furn = frow.furn;
+                  return changed = true;
+                }
+              })) {
+                ;
+              }
+              else {
+                row.furn = furns[0].furn;
+                changed = true;
+              }
+            }
+
+            if(changed) {
+              const contour = paper.project && paper.project.getItem({cnstr: row.cnstr});
+              if(contour) {
+                row.furn.refill_prm(contour);
+                contour.notify(contour, 'furn_changed');
+              }
+              else {
+                ox.sys.refill_prm(ox, row.cnstr);
+              }
+            }
+          }
+        });
 			}
 		}
 	}
@@ -3997,14 +4206,7 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
 
           }
           else {
-            if($p.job_prm.use_svgs) {
-              get_imgs.push(characteristics.get_attachment(row.characteristic.ref, 'svg')
-                .then(blob_as_text)
-                .then((svg_text) => res.ПродукцияЭскизы[row.characteristic.ref] = svg_text)
-                .catch((err) => err && err.status != 404 && $p.record_log(err))
-              );
-            }
-            else if(row.characteristic.svg) {
+            if(row.characteristic.svg) {
               res.ПродукцияЭскизы[row.characteristic.ref] = row.characteristic.svg;
             }
           }
@@ -4411,6 +4613,108 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
       resolve(ax);
 
     });
+  }
+
+  /**
+   * Пересчитывает все изделия заказа по тем же правилам, что и визуальная рисовалка
+   * @param attr
+   * @param editor
+   */
+  recalc(attr = {}, editor) {
+
+    // при необходимости, создаём редактор
+    const remove = !editor;
+    if(remove) {
+      editor = new $p.EditorInvisible();
+    }
+    const project = editor.create_scheme();
+    let tmp = Promise.resolve();
+
+    // получаем массив продукций в озу
+    return this.load_production()
+      .then((prod) => {
+        // бежим по табчасти, если продукция, пересчитываем в рисовалке, если материал или paramrtric - пересчитываем строку
+        this.production.forEach((row) => {
+          const {characteristic} = row;
+          if(characteristic.empty() || characteristic.calc_order !== this) {
+            // это материал
+            row.value_change('quantity', '', row.quantity);
+          }
+          else if(characteristic.coordinates.count()) {
+            // это изделие рисовалки
+            tmp = tmp.then(() => {
+              return project.load(characteristic, true).then(() => {
+                // выполняем пересчет
+                project.save_coordinates({save: true, svg: false});
+              });
+            });
+          }
+          else if(characteristic.leading_product.calc_order === this) {
+            return;
+          }
+          else {
+            if(!characteristic.origin.empty() && !characteristic.origin.slave) {
+              // это paramrtric
+              characteristic.specification.clear();
+              const len_angl = new $p.DocCalc_order.FakeLenAngl({len: row.len, inset: characteristic.origin});
+              const elm = new $p.DocCalc_order.FakeElm(row);
+              characteristic.origin.calculate_spec({elm, len_angl, ox: characteristic});
+              tmp = tmp.then(() => {
+                return characteristic.save().then(() => {
+                  // выполняем пересчет
+                  row.value_change('quantity', '', row.quantity);
+                });
+              });
+            }
+            else {
+              row.value_change('quantity', '', row.quantity);
+            }
+          }
+        });
+        return tmp;
+      })
+      .then(() => {
+        project.ox = '';
+        if(remove) {
+          editor.unload();
+        }
+        else {
+          project.remove();
+        }
+        return this;
+      });
+
+  }
+
+  /**
+   * Рисует изделия или фрагмент изделий заказа в Buffer в соответствии с параметрами attr
+   * @param attr
+   * @param editor
+   */
+  draw(attr = {}, editor) {
+
+    // при необходимости, создаём редактор
+    const remove = !editor;
+    if(remove) {
+      editor = new $p.EditorInvisible();
+    }
+    const project = editor.create_scheme();
+
+    attr.res = {number_doc: this.number_doc};
+
+    let tmp = Promise.resolve();
+
+    // получаем массив продукций в озу
+    return this.load_production()
+      .then((prod) => {
+        for(let ox of prod){
+          if(ox.coordinates.count()) {
+            tmp = tmp.then(() => ox.draw(attr, editor));
+          }
+        }
+        return tmp;
+      });
+
   }
 
   /**

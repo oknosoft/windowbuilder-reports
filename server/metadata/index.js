@@ -76,7 +76,7 @@ meta_pouchdb($p.classes.DataManager.prototype);
       debug(`loadind to ram: page №${page.page} (${page.page * page.limit} from ${page.total_rows})`);
     },
     pouch_complete_loaded(page) {
-      debug(`ready to receive queries, listen on port: ${process.env.PORT || 3000}`);
+      debug(`ready to receive queries, listen on port: ${process.env.PORT || 3030}`);
     },
     pouch_doc_ram_loaded() {
       pouch.local.ram.changes({
