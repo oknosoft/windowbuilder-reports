@@ -1,8 +1,7 @@
-
 delete Contour.prototype.refresh_links;
 Contour.prototype.refresh_links = function () {
 
-}
+};
 
 // формирует структуру с эскизами заполнений
 async function glasses({project, view, prod, res}) {

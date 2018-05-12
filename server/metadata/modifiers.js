@@ -400,7 +400,7 @@ $p.CatCharacteristics = class CatCharacteristics extends $p.CatCharacteristics {
     });
 
     inset.used_params.forEach((param) => {
-      if(!param.is_calculated && params.indexOf(param) == -1) {
+      if((!param.is_calculated || param.show_calculated) && params.indexOf(param) == -1) {
         ts_params.add({
           cnstr: cnstr,
           inset: blank_inset || inset,
@@ -1833,7 +1833,7 @@ $p.CatElm_visualization.prototype.__define({
 	draw: {
 		value(elm, layer, offset) {
 
-		  const {CompoundPath, constructor} = elm.project._scope;
+		  const {CompoundPath, PointText, constructor} = elm.project._scope;
 
 			let subpath;
 
@@ -1842,67 +1842,78 @@ $p.CatElm_visualization.prototype.__define({
 				const attr = JSON.parse(this.svg_path);
 
 				if(attr.method == "subpath_outer"){
-
 					subpath = elm.rays.outer.get_subpath(elm.corns(1), elm.corns(2)).equidistant(attr.offset || 10);
-
 					subpath.parent = layer._by_spec;
 					subpath.strokeWidth = attr.strokeWidth || 4;
 					subpath.strokeColor = attr.strokeColor || 'red';
 					subpath.strokeCap = attr.strokeCap || 'round';
-					if(attr.dashArray)
-						subpath.dashArray = attr.dashArray
-
+					if(attr.dashArray){
+            subpath.dashArray = attr.dashArray
+          }
 				}
-
 			}
 			else if(this.svg_path){
 
-				subpath = new CompoundPath({
-					pathData: this.svg_path,
-					parent: layer._by_spec,
-					strokeColor: 'black',
-					fillColor: 'white',
-					strokeScaling: false,
-					pivot: [0, 0],
-					opacity: elm.opacity
-				});
+        if(this.mode === 1) {
+          const attr = JSON.parse(this.attributes || '{}');
+          subpath = new PointText(Object.assign({
+            parent: layer._by_spec,
+            fillColor: 'black',
+            fontFamily: 'Mipgost',
+            fontSize: attr.fontSize || 60,
+            guide: true,
+            content: this.svg_path,
+          }, attr));
+        }
+        else {
+          subpath = new CompoundPath({
+            pathData: this.svg_path,
+            parent: layer._by_spec,
+            strokeColor: 'black',
+            fillColor: elm.constructor.clr_by_clr.call(elm, elm._row.clr, false),
+            strokeScaling: false,
+            guide: true,
+            pivot: [0, 0],
+            opacity: elm.opacity
+          });
+        }
 
 				if(elm instanceof constructor.Filling) {
           subpath.position = elm.bounds.topLeft.add([20,10]);
         }
         else {
-
+          const {generatrix, rays: {inner, outer}} = elm;
           // угол касательной
-          var angle_hor;
+          let angle_hor;
           if(elm.is_linear() || offset < 0)
-            angle_hor = elm.generatrix.getTangentAt(0).angle;
-          else if(offset > elm.generatrix.length)
-            angle_hor = elm.generatrix.getTangentAt(elm.generatrix.length).angle;
+            angle_hor = generatrix.getTangentAt(0).angle;
+          else if(offset > generatrix.length)
+            angle_hor = generatrix.getTangentAt(generatrix.length).angle;
           else
-            angle_hor = elm.generatrix.getTangentAt(offset).angle;
+            angle_hor = generatrix.getTangentAt(offset).angle;
 
           if((this.rotate != -1 || elm.orientation == $p.enm.orientations.Горизонтальная) && angle_hor != this.angle_hor){
             subpath.rotation = angle_hor - this.angle_hor;
           }
 
-          offset += elm.generatrix.getOffsetOf(elm.generatrix.getNearestPoint(elm.corns(1)));
+          offset += generatrix.getOffsetOf(generatrix.getNearestPoint(elm.corns(1)));
 
-          const p0 = elm.generatrix.getPointAt(offset > elm.generatrix.length ? elm.generatrix.length : offset || 0);
+          const p0 = generatrix.getPointAt(offset > generatrix.length ? generatrix.length : offset || 0);
 
           if(this.elm_side == -1){
             // в середине элемента
-            const p1 = elm.rays.inner.getNearestPoint(p0);
-            const p2 = elm.rays.outer.getNearestPoint(p0);
+            const p1 = inner.getNearestPoint(p0);
+            const p2 = outer.getNearestPoint(p0);
 
             subpath.position = p1.add(p2).divide(2);
 
           }else if(!this.elm_side){
             // изнутри
-            subpath.position = elm.rays.inner.getNearestPoint(p0);
+            subpath.position = inner.getNearestPoint(p0);
 
           }else{
             // снаружи
-            subpath.position = elm.rays.outer.getNearestPoint(p0);
+            subpath.position = outer.getNearestPoint(p0);
           }
         }
 
@@ -1910,75 +1921,6 @@ $p.CatElm_visualization.prototype.__define({
 		}
 	}
 
-});
-
-/**
- *
- * &copy; Evgeniy Malyarov http://www.oknosoft.ru 2014-2018
- *
- * Created 17.04.2016
- *
- * @module cat_formulas
- *
- */
-
-$p.CatFormulas.prototype.__define({
-
-	execute: {
-		value(obj, attr) {
-
-			// создаём функцию из текста формулы
-			if(!this._data._formula && this.formula){
-			  try{
-          if(this.async){
-            const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
-            this._data._formula = (new AsyncFunction("obj,$p,attr", this.formula)).bind(this);
-          }
-          else{
-            this._data._formula = (new Function("obj,$p,attr", this.formula)).bind(this);
-          }
-        }
-        catch(err){
-          this._data._formula = () => false;
-          $p.record_log(err);
-        }
-      }
-
-      const {_formula} = this._data;
-
-			if(this.parent == $p.cat.formulas.predefined("printing_plates")){
-
-        if(!_formula){
-          $p.msg.show_msg({
-            title: $p.msg.bld_title,
-            type: "alert-error",
-            text: `Ошибка в формуле<br /><b>${this.name}</b>`
-          });
-          return Promise.resolve();
-        }
-
-				// получаем HTMLDivElement с отчетом
-				return _formula(obj, $p, attr)
-
-				  // показываем отчет в отдельном окне
-					.then((doc) => doc instanceof $p.SpreadsheetDocument && doc.print());
-
-			}
-			else{
-        return _formula && _formula(obj, $p, attr)
-      }
-
-		}
-	},
-
-	_template: {
-		get() {
-			if(!this._data._template){
-        this._data._template = new $p.SpreadsheetDocument(this.template);
-      }
-			return this._data._template;
-		}
-	}
 });
 
 /**
@@ -2098,7 +2040,7 @@ $p.CatFurns = class CatFurns extends $p.CatFurns {
           if(row.forcibly || forcibly){
             prm_row.value = row.value;
           }
-          prm_row.hide = row.hide || param.is_calculated;
+          prm_row.hide = row.hide || (param.is_calculated && !param.show_calculated);
           return false;
         }
       });
@@ -2358,7 +2300,7 @@ $p.CatFurnsSpecificationRow = class CatFurnsSpecificationRow extends $p.CatFurns
           const elm = contour.profile_by_furn_side(row.side, cache);
           len = elm ? (elm._row.len - 2 * elm.nom.sizefurn) : 0;
         }
-        len = len.round(0);
+        len = len.round();
         if (len < row.lmin || len > row.lmax) {
           return res = false;
         }

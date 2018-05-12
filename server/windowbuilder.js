@@ -1306,6 +1306,9 @@ class Contour extends AbstractFilling(paper.Layer) {
           }
         }
       });
+      this.sectionals.forEach((sectional) => {
+        _attr._bounds = _attr._bounds ? _attr._bounds.unite(sectional.bounds) : sectional.bounds;
+      });
 
       if (!_attr._bounds) {
         _attr._bounds = new paper.Rectangle();
@@ -1403,14 +1406,20 @@ class Contour extends AbstractFilling(paper.Layer) {
         elm.fill_error();
       }
       else {
-        elm.path.fillColor = BuilderElement.clr_by_clr.call(elm, elm._row.clr, false);
+        const {form_area, inset: {smin, smax}} = elm;
+        if((smin && smin > form_area) || (smax && smax < form_area)) {
+          elm.fill_error();
+        }
+        else {
+          elm.path.fillColor = BuilderElement.clr_by_clr.call(elm, elm._row.clr, false);
+        }
       }
     });
 
     // ошибки соединений профиля
     this.profiles.forEach((elm) => {
       const {_corns, _rays} = elm._attr;
-      // ошибки угловых соединений
+      // ошибки угловых (торцевых) соединений
       _rays.b.check_err(err_attrs);
       _rays.e.check_err(err_attrs);
       // ошибки примыкающих соединений
@@ -1494,8 +1503,7 @@ class Contour extends AbstractFilling(paper.Layer) {
         // рисуем поперечину
         if (imposts) {
           const {offsets, do_center, step} = imposts;
-
-          function add_impost(y) {
+          const add_impost = function (y) {
             const impost = Object.assign(new paper.Path({
               insert: false,
               segments: [[bounds.left, y], [bounds.right, y]],
@@ -2246,7 +2254,7 @@ class Contour extends AbstractFilling(paper.Layer) {
         // если fix_ruch - устанавливаем по центру
         if (fix_ruch || _row.fix_ruch != -3) {
           _row.fix_ruch = fix_ruch ? -2 : -1;
-          return handle_height = (len / 2).round(0);
+          return handle_height = (len / 2).round();
         }
       }
       else if (handle_height_base > 0) {
@@ -2547,10 +2555,10 @@ class DimensionDrawer extends paper.Group {
    */
   redraw(forse) {
 
-    const {parent} = this;
+    const {parent, project: {builder_props}} = this;
     const {contours, bounds} = parent;
 
-    if(forse) {
+    if(forse || !builder_props.auto_lines) {
       this.clear();
     }
 
@@ -2560,7 +2568,7 @@ class DimensionDrawer extends paper.Group {
     }
 
     // для внешних контуров строим авторазмерные линии
-    if(!parent.parent || forse) {
+    if(builder_props.auto_lines && (!parent.parent || forse)) {
 
       const by_side = parent.profiles_by_side();
       if(!Object.keys(by_side).length) {
@@ -2572,23 +2580,23 @@ class DimensionDrawer extends paper.Group {
       // получаем все профили контура, делим их на вертикальные и горизонтальные
       const ihor = [
         {
-          point: bounds.top.round(0),
+          point: bounds.top.round(),
           elm: by_side.top,
           p: by_side.top.b.y < by_side.top.e.y ? 'b' : 'e'
         },
         {
-          point: bounds.bottom.round(0),
+          point: bounds.bottom.round(),
           elm: by_side.bottom,
           p: by_side.bottom.b.y < by_side.bottom.e.y ? 'b' : 'e'
         }];
       const ivert = [
         {
-          point: bounds.left.round(0),
+          point: bounds.left.round(),
           elm: by_side.left,
           p: by_side.left.b.x > by_side.left.e.x ? 'b' : 'e'
         },
         {
-          point: bounds.right.round(0),
+          point: bounds.right.round(),
           elm: by_side.right,
           p: by_side.right.b.x > by_side.right.e.x ? 'b' : 'e'
         }];
@@ -2604,30 +2612,30 @@ class DimensionDrawer extends paper.Group {
         const eb = our ? (elm instanceof GlassSegment ? elm._sub.b : elm.b) : elm.rays.b.npoint;
         const ee = our ? (elm instanceof GlassSegment ? elm._sub.e : elm.e) : elm.rays.e.npoint;
 
-        if(ihor.every((v) => v.point != eb.y.round(0))) {
+        if(ihor.every((v) => v.point != eb.y.round())) {
           ihor.push({
-            point: eb.y.round(0),
+            point: eb.y.round(),
             elm: elm,
             p: 'b'
           });
         }
-        if(ihor.every((v) => v.point != ee.y.round(0))) {
+        if(ihor.every((v) => v.point != ee.y.round())) {
           ihor.push({
-            point: ee.y.round(0),
+            point: ee.y.round(),
             elm: elm,
             p: 'e'
           });
         }
-        if(ivert.every((v) => v.point != eb.x.round(0))) {
+        if(ivert.every((v) => v.point != eb.x.round())) {
           ivert.push({
-            point: eb.x.round(0),
+            point: eb.x.round(),
             elm: elm,
             p: 'b'
           });
         }
-        if(ivert.every((v) => v.point != ee.x.round(0))) {
+        if(ivert.every((v) => v.point != ee.x.round())) {
           ivert.push({
-            point: ee.x.round(0),
+            point: ee.x.round(),
             elm: elm,
             p: 'e'
           });
@@ -2817,8 +2825,6 @@ class DimensionDrawer extends paper.Group {
 /**
  * ### Размерные линии на эскизе
  *
- * &copy; Evgeniy Malyarov http://www.oknosoft.ru 2014-2018
- *
  * Created 21.08.2015
  *
  * @module geometry
@@ -2857,13 +2863,16 @@ class DimensionLine extends paper.Group {
         attr.elm2 = this.project.getItem({elm: attr.elm2});
       }
     }
-
-    _attr.pos = attr.pos;
-    _attr.elm1 = attr.elm1;
-    _attr.elm2 = attr.elm2 || _attr.elm1;
-    _attr.p1 = attr.p1 || "b";
-    _attr.p2 = attr.p2 || "e";
-    _attr.offset = attr.offset;
+    if(!attr.elm2) {
+      attr.elm2 = attr.elm1;
+    }
+    if(!attr.p1) {
+      attr.p1 = 'b';
+    }
+    if(!attr.p2) {
+      attr.p2 = 'e';
+    }
+    Object.assign(_attr, attr);
 
     if(attr.impost){
       _attr.impost = true;
@@ -2892,7 +2901,6 @@ class DimensionLine extends paper.Group {
 
     this.on({
       mouseenter: this._mouseenter,
-      mouseleave: this._mouseleave,
       click: this._click
     });
 
@@ -2900,20 +2908,16 @@ class DimensionLine extends paper.Group {
 
   // виртуальные метаданные для автоформ
   _metadata() {
-    return $p.dp.builder_text.metadata();
+    return $p.dp.builder_size.metadata();
   }
 
   // виртуальный датаменеджер для автоформ
   get _manager() {
-    return $p.dp.builder_text;
+    return $p.dp.builder_size;
   }
 
   _mouseenter() {
     this.project._scope.canvas_cursor('cursor-arrow-ruler');
-  }
-
-  _mouseleave() {
-    //paper.canvas_cursor('cursor-arrow-white');
   }
 
   _click(event) {
@@ -3000,6 +3004,10 @@ class DimensionLine extends paper.Group {
 
   }
 
+  /**
+   * Обрабатывает сообщение окна размеров
+   * @param event
+   */
   sizes_wnd(event) {
 
     if(this.wnd && event.wnd == this.wnd.wnd){
@@ -3032,12 +3040,10 @@ class DimensionLine extends paper.Group {
 
   redraw() {
 
-    const {children} = this;
+    const {children, path, align} = this;
     if(!children.length){
       return;
     }
-
-    const {path} = this;
     if(!path){
       this.visible = false;
       return;
@@ -3054,8 +3060,10 @@ class DimensionLine extends paper.Group {
     const b = path.firstSegment.point;
     const e = path.lastSegment.point;
     const normal = path.getNormalAt(0).multiply(this.offset + path.offset);
-    const bs = b.add(normal.multiply(0.8));
-    const es = e.add(normal.multiply(0.8));
+    const nl = normal.length;
+    const ns = nl > 30 ? normal.normalize(nl - 20) : normal;
+    const bs = b.add(ns);
+    const es = e.add(ns);
 
     if(children.callout1.segments.length){
       children.callout1.firstSegment.point = b;
@@ -3081,9 +3089,26 @@ class DimensionLine extends paper.Group {
       children.scale.addSegments([bs, es]);
     }
 
+    children.callout1.visible = !this.hide_c1;
+    children.callout2.visible = !this.hide_c2;
+    children.scale.visible = !this.hide_line;
+
     children.text.content = length.toFixed(0);
     children.text.rotation = e.subtract(b).angle;
-    children.text.position = bs.add(es).divide(2).subtract(normal.normalize(consts.font_size / ($p.wsql.alasql.utils.isNode ? 1.3 : 2)));
+    children.text.justification = align.ref;
+    if(align == $p.enm.text_aligns.left) {
+      children.text.position = bs
+        .add(path.getTangentAt(0).multiply(consts.font_size))
+        .add(path.getNormalAt(0).multiply(consts.font_size / ($p.wsql.alasql.utils.isNode ? 1.3 : 2)));
+    }
+    else if(align == $p.enm.text_aligns.right) {
+      children.text.position = es
+        .add(path.getTangentAt(0).multiply(-consts.font_size))
+        .add(path.getNormalAt(0).multiply(consts.font_size / ($p.wsql.alasql.utils.isNode ? 1.3 : 2)));
+    }
+    else {
+      children.text.position = bs.add(es).divide(2).add(path.getNormalAt(0).multiply(consts.font_size / ($p.wsql.alasql.utils.isNode ? 1.3 : 2)));
+    }
   }
 
   get path() {
@@ -3153,14 +3178,6 @@ class DimensionLine extends paper.Group {
     this.children.text.content = parseFloat(v).round(1);
   }
 
-  // угол к горизонту в направлении размера
-  get angle() {
-    return 0;
-  }
-  set angle(v) {
-
-  }
-
   // расположение относительно контура $p.enm.pos
   get pos() {
     return this._attr.pos || "";
@@ -3175,11 +3192,53 @@ class DimensionLine extends paper.Group {
     return this._attr.offset || 90;
   }
   set offset(v) {
-    const offset = (parseInt(v) || 90).round(0);
+    const offset = (parseInt(v) || 90).round();
     if(this._attr.offset != offset){
       this._attr.offset = offset;
       this.project.register_change(true);
     }
+  }
+
+  // расположение надписи
+  get align() {
+    return (!this._attr.align || this._attr.align == '_') ? $p.enm.text_aligns.center : this._attr.align;
+  }
+  set align(v) {
+    this._attr.align = v;
+    this.redraw();
+  }
+
+  // сокрытие первой выноски
+  get hide_c1() {
+    return !!this._attr.hide_c1;
+  }
+  set hide_c1(v) {
+    const {children, hide_c1, _attr} = this
+    _attr.hide_c1 = v;
+    v && children.callout1.setSelection(false);
+    this.redraw();
+  }
+
+  // сокрытие второй выноски
+  get hide_c2() {
+    return !!this._attr.hide_c2;
+  }
+  set hide_c2(v) {
+    const {children, hide_c2, _attr} = this
+    _attr.hide_c2 = v;
+    v && children.callout2.setSelection(false);
+    this.redraw();
+  }
+
+  // сокрытие линии
+  get hide_line() {
+    return !!this._attr.hide_line;
+  }
+  set hide_line(v) {
+    const {children, hide_line, _attr} = this
+    _attr.hide_line = v;
+    v && children.scale.setSelection(false);
+    this.redraw();
   }
 
   /**
@@ -3239,7 +3298,7 @@ class DimensionLineCustom extends DimensionLine {
    * @method save_coordinates
    */
   save_coordinates() {
-    const {_row, _attr, elm_type, pos, offset, size} = this;
+    const {_row, _attr, elm_type, pos, offset, size, align} = this;
 
     // сохраняем размер
     _row.len = size;
@@ -3248,19 +3307,51 @@ class DimensionLineCustom extends DimensionLine {
     _row.elm_type = elm_type;
 
     // сериализованные данные
-    _row.path_data = JSON.stringify({
+    const path_data = {
       pos: pos,
       elm1: _attr.elm1.elm,
       elm2: _attr.elm2.elm,
       p1: _attr.p1,
       p2: _attr.p2,
       offset: offset
-    });
+    };
+    if(_attr.fix_angle) {
+      path_data.fix_angle = true;
+      path_data.angle = _attr.angle;
+    }
+    if(align == $p.enm.text_aligns.left || align == $p.enm.text_aligns.right) {
+      path_data.align = align.ref || align;
+    }
+    if(_attr.hide_c1) {
+      path_data.hide_c1 = true;
+    }
+    if(_attr.hide_c2) {
+      path_data.hide_c2 = true;
+    }
+    if(_attr.hide_line) {
+      path_data.hide_line = true;
+    }
+    _row.path_data = JSON.stringify(path_data);
   }
 
+  // выделяем подключаем окно к свойствам
+  setSelection(selection) {
+    super.setSelection(selection);
+    const {project, children, hide_c1, hide_c2, hide_line} = this
+    const {tool} = project._scope;
+    if(selection) {
+      hide_c1 && children.callout1.setSelection(false);
+      hide_c2 && children.callout2.setSelection(false);
+      hide_line && children.scale.setSelection(false);
+    }
+    tool instanceof ToolRuler && tool.wnd.attach(this);
+  }
+
+  // выделяем только при активном инструменте
   _click(event) {
     event.stop();
-    if(this.project._scope.tool instanceof ToolRuler){
+    const {tool} = this.project._scope;
+    if(tool instanceof ToolRuler){
       this.selected = true;
     }
   }
@@ -3275,9 +3366,158 @@ class DimensionLineCustom extends DimensionLine {
     }
   }
 
+  // угол к горизонту в направлении размера
+  get angle() {
+    if(this.fix_angle) {
+      return this._attr.angle || 0;
+    }
+    const {firstSegment, lastSegment} = this.path;
+    return lastSegment.point.subtract(firstSegment.point).angle.round(1);
+  }
+  set angle(v) {
+    this._attr.angle = parseFloat(v).round(1);
+    this.project.register_change(true);
+  }
 
+
+  // использование фикс угла
+  get fix_angle() {
+    return !!this._attr.fix_angle;
+  }
+  set fix_angle(v) {
+    this._attr.fix_angle = v;
+    this.project.register_change(true);
+  }
+
+  get path() {
+    if(this.fix_angle) {
+      // рисум линию под требуемым углом из точки 1
+      // ищем на линии ближайшую от точки 2
+      // рисуем остатки, смещаем на offset
+
+      const {children, _attr} = this;
+      if(!children.length){
+        return;
+      }
+      let b = typeof _attr.p1 == "number" ? _attr.elm1.corns(_attr.p1) : _attr.elm1[_attr.p1];
+      let e = typeof _attr.p2 == "number" ? _attr.elm2.corns(_attr.p2) : _attr.elm2[_attr.p2];
+      // если точки профиля еще не нарисованы - выходим
+      if(!b || !e){
+        return;
+      }
+
+      // дельта
+      const d = e.subtract(b);
+      // касательная
+      const t = d.clone();
+      t.angle = this.angle;
+      // путь по углу
+      const path = new paper.Path({insert: false, segments: [b, b.add(t)]});
+      // удлиненный путь
+      path.lastSegment.point.add(t.multiply(10000));
+      // обрезаем ближайшей точкой к 'e'
+      path.lastSegment.point = path.getNearestPoint(e);
+      path.offset = 0;
+      return path;
+    }
+    else {
+      // если угол не задан, рисуем стандартную линию
+      return super.path;
+    }
+  }
 }
 
+
+/**
+ * ### Размерная линия радиуса
+ *
+ * @module dimension_radius
+ *
+ * Created by Evgeniy Malyarov on 01.05.2018.
+ */
+
+class DimensionRadius extends DimensionLineCustom {
+
+  /**
+   * Возвращает тип элемента (размерная линия радиуса)
+   */
+  get elm_type() {
+    return $p.enm.elm_types.Радиус;
+  }
+
+  get path() {
+    // ищем точку 1 на пути профиля
+    // строим нормаль - это и будет наш путь
+
+    const {children, _attr} = this;
+    if(!children.length){
+      return;
+    }
+    const {path} = _attr.elm1;
+    // если точки профиля еще не нарисованы - выходим
+    if(!path){
+      return;
+    }
+
+    // точка начала
+    let b = path.getPointAt(_attr.p1);
+    // нормаль
+    const n = path.getNormalAt(_attr.p1).normalize(100);
+    // путь
+    const res = new paper.Path({insert: false, segments: [b, b.add(n)]});
+    res.offset = 0;
+    return res;
+  }
+
+  redraw() {
+    const {children, _attr, path, align} = this;
+    if(!path){
+      this.visible = false;
+      return;
+    }
+    this.visible = true;
+
+    const b = path.firstSegment.point;
+    const e = path.lastSegment.point;
+    const c = path.getPointAt(50);
+    const n = path.getNormalAt(0).multiply(10);
+    const c1 = c.add(n);
+    const c2 = c.subtract(n);
+
+    if(children.callout1.segments.length){
+      children.callout1.firstSegment.point = b;
+      children.callout1.lastSegment.point = c1;
+    }
+    else{
+      children.callout1.addSegments([b, c1]);
+    }
+
+    if(children.callout2.segments.length){
+      children.callout2.firstSegment.point = b;
+      children.callout2.lastSegment.point = c2;
+    }
+    else{
+      children.callout2.addSegments([b, c2]);
+    }
+
+    if(children.scale.segments.length){
+      children.scale.firstSegment.point = b;
+      children.scale.lastSegment.point = e;
+    }
+    else{
+      children.scale.addSegments([b, e]);
+    }
+
+    const curv = Math.abs(_attr.elm1.path.getCurvatureAt(_attr.p1));
+    if(curv) {
+      children.text.content = `R${(1 / curv).round(-1)}`;
+      children.text.rotation = e.subtract(b).angle;
+      children.text.justification = 'left';
+    }
+    children.text.position = e.add(path.getTangentAt(0).multiply(consts.font_size * 1.4));
+  }
+
+}
 
 /**
  * ### Базовый класс элементов построителя
@@ -5739,8 +5979,9 @@ Object.defineProperties(paper.Path.prototype, {
         return 0;
       }
       const {length} = this;
+      const step = length / 9;
       let max = 0;
-      for(let pos = 0; pos < length; pos += length / 8){
+      for(let pos = 0; pos < length; pos += step){
         const curv = Math.abs(this.getCurvatureAt(pos));
         if(curv > max){
           max = curv;
@@ -5760,8 +6001,9 @@ Object.defineProperties(paper.Path.prototype, {
         return 0;
       }
       const {length} = this;
+      const step = length / 9;
       let min = Infinity;
-      for(let pos = 0; pos < length; pos += length / 8){
+      for(let pos = 0; pos < length; pos += step){
         const curv = Math.abs(this.getCurvatureAt(pos));
         if(curv < min){
           min = curv;
@@ -6099,7 +6341,13 @@ class CnnPoint {
     const {_node, _parent, cnn} = this;
     const {_corns, _rays} = _parent._attr;
     const len = _node == 'b' ? _corns[1].getDistance(_corns[4]) : _corns[2].getDistance(_corns[3]);
-    if(!cnn || (cnn.lmin > 0 && cnn.lmin > len) || (cnn.lmax > 0 && cnn.lmax < len)) {
+    const angle = _parent.angle_at(_node);
+    if(!cnn ||
+      (cnn.lmin && cnn.lmin > len) ||
+      (cnn.lmax && cnn.lmax < len) ||
+      (cnn.amin && cnn.amin > angle) ||
+      (cnn.amax && cnn.amax < angle)
+    ) {
       if(style) {
         Object.assign(new paper.Path.Circle({
           center: _node == 'b' ? _corns[4].add(_corns[1]).divide(2) : _corns[2].add(_corns[3]).divide(2),
@@ -6834,6 +7082,16 @@ class ProfileItem extends GeneratrixElement {
     _row.path_data = generatrix.pathData;
     _row.nom = this.nom;
 
+    // радиус, как дань традиции
+    const rmin = generatrix.rmin();
+    if(rmin) {
+      // записываем среднее значение, дельту не анализируем
+      // если овал или несколько перегибов, мы это увидим в path_data
+      _row.r = ((rmin + generatrix.rmax()) / 2).round();
+    }
+    else {
+      _row.r = 0;
+    }
 
     // добавляем припуски соединений
     _row.len = this.length.round(1);
@@ -9616,6 +9874,42 @@ class Scheme extends paper.Project {
   }
 
   /**
+   * ### Допсвойства, например, скрыть размерные линии
+   * при рендеринге может переопределяться или объединяться с параметрами рендеринга
+   */
+  get builder_props() {
+    return this.ox.builder_props;
+  }
+
+  /**
+   * Загружает пользовательские размерные линии
+   * Этот код нельзя выполнить внутри load_contour, т.к. линия может ссылаться на элементы разных контуров
+   */
+  load_dimension_lines() {
+    const {Размер, Радиус} = $p.enm.elm_types;
+    this.ox.coordinates.find_rows({elm_type: {in: [Размер, Радиус]}}, (row) => {
+      const layer = this.getItem({cnstr: row.cnstr});
+      const Constructor = row.elm_type === Размер ? DimensionLineCustom : DimensionRadius;
+      layer && new Constructor({
+        parent: layer.l_dimensions,
+        row: row
+      });
+    });
+  }
+
+  /**
+   * Рекурсивно создаёт контуры изделия
+   * @param [parent] {Contour}
+   */
+  load_contour(parent) {
+    // создаём семейство конструкций
+    this.ox.constructions.find_rows({parent: parent ? parent.cnstr : 0}, (row) => {
+      // и вложенные створки
+      this.load_contour(new Contour({parent: parent, row: row}));
+    });
+  }
+
+  /**
    * ### Читает изделие по ссылке или объекту продукции
    * Выполняет следующую последовательность действий:
    * - Если передана ссылка, получает объект из базы данных
@@ -9636,32 +9930,6 @@ class Scheme extends paper.Project {
   load(id, from_service) {
     const {_attr} = this;
     const _scheme = this;
-
-    /**
-     * Рекурсивно создаёт контуры изделия
-     * @param [parent] {Contour}
-     */
-    function load_contour(parent) {
-      // создаём семейство конструкций
-      _scheme.ox.constructions.find_rows({parent: parent ? parent.cnstr : 0}, (row) => {
-        // и вложенные створки
-        load_contour(new Contour({parent: parent, row: row}));
-      });
-    }
-
-    /**
-     * Загружает пользовательские размерные линии
-     * Этот код нельзя выполнить внутри load_contour, т.к. линия может ссылаться на элементы разных контуров
-     */
-    function load_dimension_lines() {
-      _scheme.ox.coordinates.find_rows({elm_type: $p.enm.elm_types.Размер}, (row) => {
-        const layer = _scheme.getItem({cnstr: row.cnstr});
-        layer && new DimensionLineCustom({
-          parent: layer.l_dimensions,
-          row: row
-        });
-      });
-    }
 
     function load_object(o) {
 
@@ -9686,7 +9954,7 @@ class Scheme extends paper.Project {
       o = null;
 
       // создаём семейство конструкций
-      load_contour(null);
+      _scheme.load_contour(null);
 
       // перерисовываем каркас
       _scheme.redraw(from_service);
@@ -9697,7 +9965,7 @@ class Scheme extends paper.Project {
         _attr._bounds = null;
 
         // згружаем пользовательские размерные линии
-        load_dimension_lines();
+        _scheme.load_dimension_lines();
 
         setTimeout(() => {
 
@@ -10240,6 +10508,7 @@ class Scheme extends paper.Project {
 
   /**
    * ### Уравнивает геометрически или по заполнениям
+   * сюда попадаем из move_points, когда меняем габариты
    * @param auto_align
    */
   do_align(auto_align, profiles) {
@@ -10269,11 +10538,12 @@ class Scheme extends paper.Project {
           glasses.indexOf(filling) == -1 && glasses.push(filling);
         }
       }
-      this._scope.do_glass_align('width', glasses);
+      this._scope.glass_align('width', glasses);
 
-      if(auto_align == $p.enm.align_types.ПоЗаполнениям) {
-
-      }
+      // TODO: понять, что хотел автор
+      // if(auto_align == $p.enm.align_types.ПоЗаполнениям) {
+      //
+      // }
     }, 100);
 
   }
@@ -10394,9 +10664,9 @@ class Scheme extends paper.Project {
    */
   draw_sizes() {
 
-    const {bounds, l_dimensions} = this;
+    const {bounds, l_dimensions, builder_props} = this;
 
-    if(bounds) {
+    if(bounds && builder_props.auto_lines) {
 
       if(!l_dimensions.bottom) {
         l_dimensions.bottom = new DimensionLine({
@@ -11526,8 +11796,7 @@ class Pricing {
     return pouch.remote.doc.get(`_local/price_${step}`)
       .then((remote) => {
         return pouch.local.doc.get(`_local/price_${step}`)
-          .then((local) => local)
-          .catch(() => {})
+          .catch(() => ({}))
           .then((local) => {
             // грузим цены из remote
             this.build_cache_local(remote);
@@ -12856,7 +13125,7 @@ class ProductsBuilding {
           // console.timeEnd("save");
           // console.profileEnd();
         })
-          .then(() => scheme._scope && setTimeout(() => ox.calc_order._modified && ox.calc_order.save(), 1000))
+          .then(() => (scheme._scope || attr.close) && setTimeout(() => ox.calc_order._modified && ox.calc_order.save(), 1000))
           .catch((ox) => {
 
             // console.timeEnd("save");
@@ -13221,11 +13490,10 @@ $p.spec_building = new SpecBuilding($p);
 	}
 })($p.classes.DataManager);
 
-
 delete Contour.prototype.refresh_links;
 Contour.prototype.refresh_links = function () {
 
-}
+};
 
 // формирует структуру с эскизами заполнений
 async function glasses({project, view, prod, res}) {
