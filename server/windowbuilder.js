@@ -2084,12 +2084,12 @@ class Contour extends AbstractFilling(paper.Layer) {
 
   refresh_prm_links(root) {
 
-    const {cnstr} = this;
+    const cnstr = root ? 0 : this.cnstr || -9999;
     let notify;
 
     // пробегаем по всем строкам
     this.params.find_rows({
-      cnstr: root ? 0 : cnstr || -9999,
+      cnstr,
       inset: $p.utils.blank.guid,
       hide: {not: true},
     }, (prow) => {
@@ -2100,7 +2100,6 @@ class Contour extends AbstractFilling(paper.Layer) {
       // проверим вхождение значения в доступные и при необходимости изменим
       if (links.length && param.linked_values(links, prow)) {
         notify = true;
-        prow._manager.emit_async('update', prow, {value: prow._obj.value});
       }
       if (!notify) {
         notify = hide;
@@ -2108,7 +2107,13 @@ class Contour extends AbstractFilling(paper.Layer) {
     });
 
     // информируем мир о новых размерах нашего контура
-    notify && this.notify(this, 'refresh_prm_links');
+    if(notify) {
+      this.notify(this, 'refresh_prm_links');
+      if(root) {
+        const {_dp} = this.project;
+        _dp._manager.emit_async('rows', _dp, {extra_fields: true});
+      }
+    };
 
   }
 
@@ -4437,7 +4442,7 @@ class Filling extends AbstractFilling(BuilderElement) {
     imposts.forEach((elm) => elm.redraw());
 
     // прочистим пути
-    this.purge_path();
+    this.purge_paths();
 
     // если текст не создан - добавляем
     if(!_attr._text){
@@ -4573,10 +4578,10 @@ class Filling extends AbstractFilling(BuilderElement) {
   /**
    * Прочищает паразитные пути
    */
-  purge_path() {
+  purge_paths() {
     const paths = this.children.filter((child) => child instanceof paper.Path);
     const {path} = this;
-    paths.forEach((p) => p != path && p.remove());
+    paths.forEach((p) => p !== path && p.remove());
   }
 
   fill_error() {
@@ -4675,8 +4680,6 @@ class Filling extends AbstractFilling(BuilderElement) {
       _attr._profiles = [];
     }
 
-    let needPurge;
-
     if(attr instanceof paper.Path){
       path.addSegments(attr.segments);
     }
@@ -4740,23 +4743,44 @@ class Filling extends AbstractFilling(BuilderElement) {
         path.addSegments(curr.sub_path.segments);
         ["anext","pb","pe"].forEach((prop) => { delete curr[prop] });
         _attr._profiles.push(curr);
-
-        if(!needPurge){
-          needPurge = Math.abs(curr.angle_hor % 90) < 0.2
-        }
       }
-    }
-
-    if(needPurge || path.hasHandles()) {
-      const delta = 2;
-      const toRemove = [];
-      let prev;
     }
 
     if(path.segments.length && !path.closed){
       path.closePath(true);
     }
 
+    // прочищаем самопересечения
+    const intersections = path.self_intersections();
+    if(intersections.length) {
+      const {curves, segments} = path;
+      for(const {crv1, crv2, point} of intersections) {
+
+        const loc1 = crv1.getLocationOf(point);
+        const loc2 = crv2.getLocationOf(point);
+        const offset1 = loc2.offset - loc1.offset;
+        const offset2 = loc1.offset + path.length - loc2.offset;
+
+        crv1.divideAt(loc1);
+        crv2.divideAt(loc2);
+
+        if(offset2 < offset1) {
+          const ind = segments.indexOf(crv2.segment2) + 1;
+          while (ind < segments.length) {
+            path.removeSegment(ind);
+          }
+          while (path.firstSegment !== crv1.segment2) {
+            path.removeSegment(0);
+          }
+        }
+        else {
+          const ind = segments.indexOf(crv1.segment2);
+          while (segments[ind] !== crv2.segment1) {
+            path.removeSegment(ind);
+          }
+        }
+      }
+    }
     path.reduce();
 
   }
@@ -5610,9 +5634,16 @@ class Magnetism {
           const rNext = (pNext.outer ? pNext.profile.rays.outer : pNext.profile.rays.inner).equidistant(-pNext.profile.nom.sizefaltz);
           const rOur = (pOur.outer ? pOur.profile.rays.outer : pOur.profile.rays.inner).equidistant(-pOur.profile.nom.sizefaltz);
 
-          const p0 = rSegm.intersect_point(rNext, selected.point);
-          const p1 = rSegm.intersect_point(rOur, selected.point);
-          const delta = p0.subtract(p1);
+          const ps = rSegm.intersect_point(rOur, spoint);
+          // если next является почти продолжением segm (арка), точку соединения ищем иначе
+          const be = ps.getDistance(segm.profile.b) > ps.getDistance(segm.profile.e) ? 'e' : 'b';
+          const da = rSegm.angle_to(rNext, segm.profile[be]);
+
+          let p0 = rSegm.intersect_point(rNext, ps);
+          if(!p0 || da < 4) {
+            p0 = rNext.getNearestPoint(segm.profile[be]);
+          }
+          const delta = p0.subtract(ps);
           selected.profile.move_points(delta, true);
 
         }
@@ -5661,27 +5692,52 @@ Object.defineProperties(paper.Path.prototype, {
     }
   },
 
-  is_self_intersected: {
-    value() {
+  /**
+   * Возвращает массив самопересечений
+   * @param first
+   * @return {Array}
+   */
+  self_intersections: {
+    value(first) {
       const {curves} = this;
-      return curves.some((crv1, i1) => {
+      const res = [];
+      curves.some((crv1, i1) => {
         return curves.some((crv2, i2) => {
+          if(i2 <= i1) {
+            return;
+          }
           const intersections = crv1.getIntersections(crv2);
           if(intersections.length) {
-            if(intersections.length > 1) {
-              return true;
-            }
             const {point} = intersections[0];
+            if(intersections.length > 1) {
+              res.push({crv1, crv2, point});
+              if(first) {
+                return true;
+              }
+            }
             if(crv2.point1.is_nearest(crv1.point2, 0) && point.is_nearest(crv1.point2, 0)) {
-              return false;
+              return;
             }
             if(crv1.point1.is_nearest(crv2.point2, 0) && point.is_nearest(crv1.point1, 0)) {
-              return false;
+              return;
             }
-            return true;
-          };
-        })
-      })
+            res.push({crv1, crv2, point});
+            if(first) {
+              return true;
+            }
+          }
+        });
+      });
+      return res;
+    }
+  },
+
+  /**
+   * Является ли путь самопересекающимся
+   */
+  is_self_intersected: {
+    value() {
+      return this.self_intersections(true).length > 0;
     }
   },
 
@@ -5711,26 +5767,29 @@ Object.defineProperties(paper.Path.prototype, {
      * @return {Boolean}
      */
   is_linear: {
-      value() {
-        // если в пути единственная кривая и она прямая - путь прямой
-        if(this.curves.length == 1 && this.firstCurve.isLinear())
-          return true;
-        // если в пути есть искривления, путь кривой
-        else if(this.hasHandles())
-          return false;
-        else{
-          // если у всех кривых пути одинаковые направленные углы - путь прямой
-          var curves = this.curves,
-            da = curves[0].point1.getDirectedAngle(curves[0].point2), dc;
-          for(var i = 1; i < curves.lenght; i++){
-            dc = curves[i].point1.getDirectedAngle(curves[i].point2);
-            if(Math.abs(dc - da) > consts.epsilon)
-              return false;
-          }
-        }
+    value() {
+      const {curves, firstCurve} = this;
+      // если в пути единственная кривая и она прямая - путь прямой
+      if(curves.length == 1 && firstCurve.isLinear()) {
         return true;
       }
-    },
+      // если в пути есть искривления, путь кривой
+      else if(this.hasHandles()) {
+        return false;
+      }
+      else {
+        // если у всех кривых пути одинаковые направленные углы - путь прямой
+        const da = firstCurve.point1.getDirectedAngle(firstCurve.point2);
+        for (let i = 1; i < curves.length; i++) {
+          const dc = curves[i].point1.getDirectedAngle(curves[i].point2);
+          if(Math.abs(dc - da) > consts.epsilon) {
+            return false;
+          }
+        }
+      }
+      return true;
+    }
+  },
 
   /**
    * Выясняет, расположена ли точка в окрестности пути
@@ -6068,40 +6127,46 @@ Object.defineProperties(paper.Point.prototype, {
 	 * @return {Point}
 	 */
 	arc_cntr: {
-		value(x1,y1, x2,y2, r0, ccw){
-			var a,b,p,r,q,yy1,xx1,yy2,xx2;
-			if(ccw){
-				var tmpx=x1, tmpy=y1;
-				x1=x2; y1=y2; x2=tmpx; y2=tmpy;
-			}
-			if (x1!=x2){
-				a=(x1*x1 - x2*x2 - y2*y2 + y1*y1)/(2*(x1-x2));
-				b=((y2-y1)/(x1-x2));
-				p=b*b+ 1;
-				r=-2*((x1-a)*b+y1);
-				q=(x1-a)*(x1-a) - r0*r0 + y1*y1;
-				yy1=(-r + Math.sqrt(r*r - 4*p*q))/(2*p);
-				xx1=a+b*yy1;
-				yy2=(-r - Math.sqrt(r*r - 4*p*q))/(2*p);
-				xx2=a+b*yy2;
-			} else{
-				a=(y1*y1 - y2*y2 - x2*x2 + x1*x1)/(2*(y1-y2));
-				b=((x2-x1)/(y1-y2));
-				p=b*b+ 1;
-				r=-2*((y1-a)*b+x1);
-				q=(y1-a)*(y1-a) - r0*r0 + x1*x1;
-				xx1=(-r - Math.sqrt(r*r - 4*p*q))/(2*p);
-				yy1=a+b*xx1;
-				xx2=(-r + Math.sqrt(r*r - 4*p*q))/(2*p);
-				yy2=a+b*xx2;
-			}
+    value(x1, y1, x2, y2, r0, ccw) {
+      let a, b, p, r, q, yy1, xx1, yy2, xx2;
+      if(ccw) {
+        const tmpx = x1, tmpy = y1;
+        x1 = x2;
+        y1 = y2;
+        x2 = tmpx;
+        y2 = tmpy;
+      }
+      if(x1 != x2) {
+        a = (x1 * x1 - x2 * x2 - y2 * y2 + y1 * y1) / (2 * (x1 - x2));
+        b = ((y2 - y1) / (x1 - x2));
+        p = b * b + 1;
+        r = -2 * ((x1 - a) * b + y1);
+        q = (x1 - a) * (x1 - a) - r0 * r0 + y1 * y1;
+        yy1 = (-r + Math.sqrt(r * r - 4 * p * q)) / (2 * p);
+        xx1 = a + b * yy1;
+        yy2 = (-r - Math.sqrt(r * r - 4 * p * q)) / (2 * p);
+        xx2 = a + b * yy2;
+      }
+      else {
+        a = (y1 * y1 - y2 * y2 - x2 * x2 + x1 * x1) / (2 * (y1 - y2));
+        b = ((x2 - x1) / (y1 - y2));
+        p = b * b + 1;
+        r = -2 * ((y1 - a) * b + x1);
+        q = (y1 - a) * (y1 - a) - r0 * r0 + x1 * x1;
+        xx1 = (-r - Math.sqrt(r * r - 4 * p * q)) / (2 * p);
+        yy1 = a + b * xx1;
+        xx2 = (-r + Math.sqrt(r * r - 4 * p * q)) / (2 * p);
+        yy2 = a + b * xx2;
+      }
 
-			if (new paper.Point(xx1,yy1).point_pos(x1,y1, x2,y2)>0)
-				return {x: xx1, y: yy1};
-			else
-				return {x: xx2, y: yy2}
-		}
-	},
+      if(new paper.Point(xx1, yy1).point_pos(x1, y1, x2, y2) > 0) {
+        return {x: xx1, y: yy1};
+      }
+      else {
+        return {x: xx2, y: yy2}
+      }
+    }
+  },
 
 	/**
 	 * ### Рассчитывает координаты точки, лежащей на окружности
@@ -6619,11 +6684,11 @@ class ProfileItem extends GeneratrixElement {
   }
 
   set cnn1(v) {
-    const {rays, project} = this;
+    const {rays} = this;
     const cnn = $p.cat.cnns.get(v);
     if(rays.b.cnn != cnn) {
       rays.b.cnn = cnn;
-      project.register_change();
+      this.project.register_change();
     }
   }
 
@@ -6639,11 +6704,11 @@ class ProfileItem extends GeneratrixElement {
   }
 
   set cnn2(v) {
-    const {rays, project} = this;
+    const {rays} = this;
     const cnn = $p.cat.cnns.get(v);
     if(rays.e.cnn != cnn) {
       rays.e.cnn = cnn;
-      project.register_change();
+      this.project.register_change();
     }
   }
 
@@ -6711,12 +6776,12 @@ class ProfileItem extends GeneratrixElement {
   }
 
   set r(v) {
-    const {_row, _attr, project} = this;
+    const {_row, _attr} = this;
     if(_row.r != v) {
       _attr._rays.clear();
       _row.r = v;
       this.set_generatrix_radius();
-      project.notify(this, 'update', {r: true, arc_h: true, arc_ccw: true});
+      this.project.notify(this, 'update', {r: true, arc_h: true, arc_ccw: true});
     }
   }
 
@@ -6747,12 +6812,12 @@ class ProfileItem extends GeneratrixElement {
   }
 
   set arc_ccw(v) {
-    const {_row, _attr, project} = this;
+    const {_row, _attr} = this;
     if(_row.arc_ccw != v) {
       _attr._rays.clear();
       _row.arc_ccw = v;
       this.set_generatrix_radius();
-      project.notify(this, 'update', {r: true, arc_h: true, arc_ccw: true});
+      this.project.notify(this, 'update', {r: true, arc_h: true, arc_ccw: true});
     }
   }
 
@@ -6785,7 +6850,7 @@ class ProfileItem extends GeneratrixElement {
       }
       _row.r = b.arc_r(b.x, b.y, e.x, e.y, v);
       this.set_generatrix_radius(v);
-      project.notify(this, 'update', {r: true, arc_h: true, arc_ccw: true});
+      this.project.notify(this, 'update', {r: true, arc_h: true, arc_ccw: true});
     }
   }
 
@@ -7053,13 +7118,12 @@ class ProfileItem extends GeneratrixElement {
    */
   save_coordinates() {
 
-    const {_attr, _row, rays, generatrix, project} = this;
+    const {_attr, _row, rays, generatrix, project: {cnns}} = this;
 
     if(!generatrix) {
       return;
     }
 
-    const {cnns} = project;
     const b = rays.b;
     const e = rays.e;
     const row_b = cnns.add({
@@ -7257,7 +7321,7 @@ class ProfileItem extends GeneratrixElement {
    * Искривляет образующую в соответствии с радиусом
    */
   set_generatrix_radius(height) {
-    const {generatrix, _row, layer, project, selected} = this;
+    const {generatrix, _row, layer, selected} = this;
     const b = generatrix.firstSegment.point.clone();
     const e = generatrix.lastSegment.point.clone();
     const min_radius = b.getDistance(e) / 2;
@@ -9615,13 +9679,13 @@ class Scheme extends paper.Project {
 
     this.magnetism = new Magnetism(this);
 
+    const isBrowser = typeof requestAnimationFrame === 'function';
+
     /**
      * Перерисовывает все контуры изделия. Не занимается биндингом.
      * Предполагается, что взаимное перемещение профилей уже обработано
      */
     this.redraw = () => {
-
-      const isBrowser = typeof requestAnimationFrame === 'function';
 
       _attr._opened && !_attr._silent && _scheme._scope && isBrowser && requestAnimationFrame(_scheme.redraw);
 
@@ -10335,7 +10399,7 @@ class Scheme extends paper.Project {
         }
       }
       else if(item instanceof Filling) {
-        item.purge_path();
+        item.purge_paths();
       }
     }
 
@@ -10416,7 +10480,7 @@ class Scheme extends paper.Project {
         view.center = center.add([dx, -dy]);
       }
       else {
-        view.center = center.add([dx, 50]);
+        view.center = center.add([dx / 2, 50]);
       }
     }
   }
@@ -11705,7 +11769,7 @@ class Pricing {
               since: 'now',
               live: true,
               include_docs: true,
-              selector: {class_name: {$in: ['doc.nom_prices_setup', 'doc.calc_order', 'cat.formulas']}}
+              selector: {class_name: {$in: ['doc.nom_prices_setup', 'doc.calc_order']}}
             }).on('change', (change) => {
               // формируем новый
               if(change.doc.class_name == 'doc.nom_prices_setup'){
