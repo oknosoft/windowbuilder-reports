@@ -1,5 +1,5 @@
 /*!
- windowbuilder-reports v2.0.238, built:2018-05-12
+ windowbuilder-reports v2.0.238, built:2018-06-15
  © 2014-2018 Evgeniy Malyarov and the Oknosoft team http://www.oknosoft.ru
  To obtain commercial license and technical support, contact info@oknosoft.ru
  */
@@ -129,14 +129,15 @@ function modifiers($p) {
 })($p.enm.inserts_types);
 (function($p){
 	$p.enm.open_types.__define({
-		is_opening: {
-			value(v) {
-				if(!v || v.empty() || v == this.Глухое || v == this.Неподвижное)
-					return false;
-				return true;
-			}
-		}
-	});
+    is_opening: {
+      value(v) {
+        if(!v || v.empty() || v == this.Глухое || v == this.Неподвижное) {
+          return false;
+        }
+        return true;
+      }
+    }
+  });
 	$p.enm.orientations.__define({
 		hor: {
 			get() {
@@ -1296,7 +1297,7 @@ $p.CatElm_visualization.prototype.__define({
           subpath = new PointText(Object.assign({
             parent: layer._by_spec,
             fillColor: 'black',
-            fontFamily: 'Mipgost',
+            fontFamily: $p.job_prm.builder.font_family,
             fontSize: attr.fontSize || 60,
             guide: true,
             content: this.svg_path,
@@ -2608,6 +2609,7 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
   }
   before_save() {
     const {Отклонен, Отозван, Шаблон, Подтвержден, Отправлен} = $p.enm.obj_delivery_states;
+    const must_be_saved = [Подтвержден, Отправлен].indexOf(this.obj_delivery_state) == -1;
     let doc_amount = 0,
       amount_internal = 0;
     if(this.posted) {
@@ -2637,7 +2639,7 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
           text: 'Не заполнен реквизит "офис продаж" (подразделение)',
           title: this.presentation
         });
-        return false;
+        return must_be_saved;
       }
       if(this.partner.empty()) {
         $p.msg.show_msg && $p.msg.show_msg({
@@ -2645,7 +2647,7 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
           text: 'Не указан контрагент (дилер)',
           title: this.presentation
         });
-        return false;
+        return must_be_saved;
       }
     }
     this.production.forEach((row) => {
@@ -3520,235 +3522,6 @@ $p.DocCalc_orderProductionRow.pfields = 'price_internal,quantity,discount_percen
 return $p;
 }
 
-function cch_properties ($p) {
-  $p.cch.properties.__define({
-    check_mandatory: {
-      value(prms, title) {
-        var t, row;
-        for (t in prms) {
-          row = prms[t];
-          if(row.param.mandatory && (!row.value || row.value.empty())) {
-            $p.msg.show_msg({
-              type: 'alert-error',
-              text: $p.msg.bld_empty_param + row.param.presentation,
-              title: title || $p.msg.bld_title
-            });
-            return true;
-          }
-        }
-      }
-    },
-    slist: {
-      value(prop, ret_mgr) {
-        var res = [], rt, at, pmgr, op = this.get(prop);
-        if(op && op.type.is_ref) {
-          for (rt in op.type.types)
-            if(op.type.types[rt].indexOf('.') > -1) {
-              at = op.type.types[rt].split('.');
-              pmgr = $p[at[0]][at[1]];
-              if(pmgr) {
-                if(ret_mgr) {
-                  ret_mgr.mgr = pmgr;
-                }
-                if(pmgr.class_name == 'enm.open_directions') {
-                  pmgr.get_option_list().forEach((v) => v.value && v.value != $p.enm.tso.folding && res.push(v));
-                }
-                else if(pmgr.class_name.indexOf('enm.') != -1 || !pmgr.metadata().has_owners) {
-                  res = pmgr.get_option_list();
-                }
-                else {
-                  pmgr.find_rows({owner: prop}, (v) => res.push({value: v.ref, text: v.presentation}));
-                }
-              }
-            }
-        }
-        return res;
-      }
-    }
-  });
-  $p.CchProperties.prototype.__define({
-    is_calculated: {
-      get() {
-        return ($p.job_prm.properties.calculated || []).indexOf(this) != -1;
-      }
-    },
-    show_calculated: {
-      get() {
-        return ($p.job_prm.properties.show_calculated || []).indexOf(this) != -1;
-      }
-    },
-    calculated_value: {
-      value(obj) {
-        if(!this._calculated_value) {
-          if(this._formula) {
-            this._calculated_value = $p.cat.formulas.get(this._formula);
-          }
-          else {
-            return;
-          }
-        }
-        return this._calculated_value.execute(obj);
-      }
-    },
-    check_condition: {
-      value({row_spec, prm_row, elm, cnstr, origin, ox, calc_order}) {
-        const {is_calculated} = this;
-        const {utils, enm: {comparison_types}} = $p;
-        const val = is_calculated ? this.calculated_value({
-          row: row_spec,
-          cnstr: cnstr || 0,
-          elm,
-          ox,
-          calc_order
-        }) : this.extract_value(prm_row);
-        let ok = false;
-        if(ox && !Array.isArray(val) && (prm_row.comparison_type.empty() || prm_row.comparison_type == comparison_types.eq)) {
-          if(is_calculated) {
-            ok = val == prm_row.value;
-          }
-          else {
-            ox.params.find_rows({
-              cnstr: cnstr || 0,
-              inset: (typeof origin !== 'number' && origin) || utils.blank.guid,
-              param: this,
-              value: val
-            }, () => {
-              ok = true;
-              return false;
-            });
-          }
-        }
-        else if(is_calculated) {
-          const value = this.extract_value(prm_row);
-          ok = utils.check_compare(val, value, prm_row.comparison_type, comparison_types);
-        }
-        else {
-          ox.params.find_rows({
-            cnstr: cnstr || 0,
-            inset: (typeof origin !== 'number' && origin) || utils.blank.guid,
-            param: this
-          }, ({value}) => {
-            ok = utils.check_compare(value, val, prm_row.comparison_type, comparison_types);
-            return false;
-          });
-        }
-        return ok;
-      }
-    },
-    extract_value: {
-      value({comparison_type, txt_row, value}) {
-        switch (comparison_type) {
-        case $p.enm.comparison_types.in:
-        case $p.enm.comparison_types.nin:
-          if(!txt_row) {
-            return value;
-          }
-          try {
-            const arr = JSON.parse(txt_row);
-            const {types} = this.type;
-            if(types && types.length == 1) {
-              const mgr = $p.md.mgr_by_class_name(types[0]);
-              return arr.map((ref) => mgr.get(ref, false));
-            }
-            return arr;
-          }
-          catch (err) {
-            return value;
-          }
-        default:
-          return value;
-        }
-      }
-    },
-    params_links: {
-      value(attr) {
-        if(!this.hasOwnProperty('_params_links')) {
-          this._params_links = $p.cat.params_links.find_rows({slave: this});
-        }
-        return this._params_links.filter((link) => {
-          const use_master = link.use_master || 0;
-          let ok = use_master < 2;
-          const arr = !use_master ? [{key:link.master}] : link.leadings;
-          arr.forEach((row_key) => {
-            let ok_key = true;
-            row_key.key.params.forEach((row) => {
-              ok_key = row.property.check_condition({
-                cnstr: attr.grid.selection.cnstr,
-                ox: attr.obj._owner._owner,
-                prm_row: row,
-                elm: attr.obj,
-              });
-              if (!ok_key) {
-                return false;
-              }
-            });
-            if (use_master == 2){
-              ok = ok || ok_key;
-            }
-            else if (!ok_key){
-              ok = false;
-              return false;
-            }
-          });
-          return ok;
-        });
-      }
-    },
-    linked_values: {
-      value(links, prow) {
-        const values = [];
-        let changed;
-        links.forEach((link) => link.values.forEach((row) => values.push(row)));
-        if(values.some((row) => row._obj.value == prow.value)) {
-          return;
-        }
-        if(values.some((row) => {
-            if(row.forcibly) {
-              prow.value = row._obj.value;
-              return true;
-            }
-            if(row.by_default && (!prow.value || prow.value.empty && prow.value.empty())) {
-              prow.value = row._obj.value;
-              changed = true;
-            }
-          })) {
-          return true;
-        }
-        if(changed) {
-          return true;
-        }
-        if(values.length) {
-          prow.value = values[0]._obj.value;
-          return true;
-        }
-      }
-    },
-    filter_params_links: {
-      value(filter, attr, links) {
-        if(!links) {
-          links = this.params_links(attr);
-        }
-        links.forEach((link) => {
-          if(!filter.ref) {
-            filter.ref = {in: []};
-          }
-          if(filter.ref.in) {
-            link.values._obj.forEach((row) => {
-              if(filter.ref.in.indexOf(row.value) == -1) {
-                filter.ref.in.push(row.value);
-              }
-            });
-          }
-        });
-      }
-    }
-  });
-}
-
-function chartscharacteristics ($p) {
-	cch_properties($p);
-}
-
 function i18ru ($p) {
   Object.assign($p.msg, {
     main_title: 'Окнософт: заказ дилера ',
@@ -3807,7 +3580,6 @@ function common ($p) {
 }
 
 function modifiersNew ($p) {
-  chartscharacteristics($p);
   common($p);
 }
 
@@ -4954,7 +4726,7 @@ class Contour extends AbstractFilling(paper$1.Layer) {
         new paper$1.PointText({
           parent: props.parent,
           fillColor: 'black',
-          fontFamily: 'Mipgost',
+          fontFamily: consts.font_family,
           fontSize: consts.elm_font_size,
           guide: true,
           content: row.inset.presentation,
@@ -5380,10 +5152,10 @@ class Contour extends AbstractFilling(paper$1.Layer) {
     this.notify(this, 'contour_redrawed', this._attr._bounds);
   }
   refresh_prm_links(root) {
-    const {cnstr} = this;
+    const cnstr = root ? 0 : this.cnstr || -9999;
     let notify;
     this.params.find_rows({
-      cnstr: root ? 0 : cnstr || -9999,
+      cnstr,
       inset: $p.utils.blank.guid,
       hide: {not: true},
     }, (prow) => {
@@ -5392,14 +5164,18 @@ class Contour extends AbstractFilling(paper$1.Layer) {
       const hide = links.some((link) => link.hide);
       if (links.length && param.linked_values(links, prow)) {
         notify = true;
-        prow._manager.emit_async('update', prow, {value: prow._obj.value});
       }
       if (!notify) {
         notify = hide;
       }
     });
-    notify && this.notify(this, 'refresh_prm_links');
-  }
+    if(notify) {
+      this.notify(this, 'refresh_prm_links');
+      if(root) {
+        const {_dp} = this.project;
+        _dp._manager.emit_async('rows', _dp, {extra_fields: true});
+      }
+    }  }
   save_coordinates(short) {
     if (!short) {
       this.glasses(false, true).forEach((glass) => !glass.visible && glass.remove());
@@ -5567,12 +5343,12 @@ class Contour extends AbstractFilling(paper$1.Layer) {
   get w() {
     const {is_rectangular, bounds} = this;
     const {left, right} = this.profiles_by_side();
-    return bounds ? bounds.width - left.nom.sizefurn - right.nom.sizefurn : 0;
+    return bounds && left && right ? bounds.width - left.nom.sizefurn - right.nom.sizefurn : 0;
   }
   get h() {
     const {is_rectangular, bounds} = this;
     const {top, bottom} = this.profiles_by_side();
-    return bounds ? bounds.height - top.nom.sizefurn - bottom.nom.sizefurn : 0;
+    return bounds && top && bottom ? bounds.height - top.nom.sizefurn - bottom.nom.sizefurn : 0;
   }
   get l_text() {
     const {_attr} = this;
@@ -5677,7 +5453,6 @@ class DimensionDrawer extends paper$1.Group {
   }
   redraw(forse) {
     const {parent, project: {builder_props}} = this;
-    const {contours, bounds} = parent;
     if(forse || !builder_props.auto_lines) {
       this.clear();
     }
@@ -5685,32 +5460,10 @@ class DimensionDrawer extends paper$1.Group {
       chld.l_dimensions.redraw();
     }
     if(builder_props.auto_lines && (!parent.parent || forse)) {
-      const by_side = parent.profiles_by_side();
+      const {ihor, ivert, by_side} = this.imposts();
       if(!Object.keys(by_side).length) {
         return this.clear();
       }
-      const ihor = [
-        {
-          point: bounds.top.round(),
-          elm: by_side.top,
-          p: by_side.top.b.y < by_side.top.e.y ? 'b' : 'e'
-        },
-        {
-          point: bounds.bottom.round(),
-          elm: by_side.bottom,
-          p: by_side.bottom.b.y < by_side.bottom.e.y ? 'b' : 'e'
-        }];
-      const ivert = [
-        {
-          point: bounds.left.round(),
-          elm: by_side.left,
-          p: by_side.left.b.x > by_side.left.e.x ? 'b' : 'e'
-        },
-        {
-          point: bounds.right.round(),
-          elm: by_side.right,
-          p: by_side.right.b.x > by_side.right.e.x ? 'b' : 'e'
-        }];
       const profiles = new Set(parent.profiles);
       parent.imposts.forEach((elm) => elm.visible && profiles.add(elm));
       for (let elm of profiles) {
@@ -5772,6 +5525,54 @@ class DimensionDrawer extends paper$1.Group {
       }
       this.by_contour(ihor, ivert, forse);
     }
+    for (let dl of this.children) {
+      dl.redraw && dl.redraw();
+    }
+  }
+  draw_by_imposts() {
+    const {parent, project: {builder_props}} = this;
+    this.clear();
+    let index = 0;
+    for (let elm of parent.profiles) {
+      const {inner, outer} = elm.joined_imposts();
+      const {generatrix, angle_hor} = elm;
+      generatrix.visible = false;
+      const imposts = inner.concat(outer);
+      if(!imposts.length) {
+        continue;
+      }
+      elm.mark_direction();
+      let invert = angle_hor > 135 && angle_hor < 315;
+      for(const impost of imposts) {
+        const {point, profile: {rays, nom}} = impost;
+        const pi = generatrix.intersect_point(rays.inner, point);
+        const po = generatrix.intersect_point(rays.outer, point);
+        const dx = generatrix.getOffsetOf(point);
+        const dxi = generatrix.getOffsetOf(pi);
+        const dxo = generatrix.getOffsetOf(po);
+        let dx1, dx2;
+        if(dx > dxi) {
+          dx1 = dxi + nom.sizefaltz;
+          dx2 = dxo - nom.sizefaltz;
+        }
+        else {
+          dx1 = dxo + nom.sizefaltz;
+          dx2 = dxi - nom.sizefaltz;
+        }
+        this.ihor[`i${++index}`] = new DimensionLineImpost({
+          elm1: elm,
+          elm2: elm,
+          p1: invert ? dx : 'b',
+          p2: invert ? 'b' : dx,
+          dx1,
+          dx2,
+          parent: this,
+          offset: invert ? -150 : 150,
+          outer: outer.indexOf(impost) !== -1,
+        });
+      }
+    }
+    this.by_contour([], [], true);
     for (let dl of this.children) {
       dl.redraw && dl.redraw();
     }
@@ -5883,6 +5684,34 @@ class DimensionDrawer extends paper$1.Group {
       }
     }
   }
+  imposts() {
+    const {parent} = this;
+    const {bounds} = parent;
+    const by_side = parent.profiles_by_side();
+    const ihor = [
+      {
+        point: bounds.top.round(),
+        elm: by_side.top,
+        p: by_side.top.b.y < by_side.top.e.y ? 'b' : 'e'
+      },
+      {
+        point: bounds.bottom.round(),
+        elm: by_side.bottom,
+        p: by_side.bottom.b.y < by_side.bottom.e.y ? 'b' : 'e'
+      }];
+    const ivert = [
+      {
+        point: bounds.left.round(),
+        elm: by_side.left,
+        p: by_side.left.b.x > by_side.left.e.x ? 'b' : 'e'
+      },
+      {
+        point: bounds.right.round(),
+        elm: by_side.right,
+        p: by_side.right.b.x > by_side.right.e.x ? 'b' : 'e'
+      }];
+    return {ihor, ivert, by_side};
+  }
   get owner_bounds() {
     return this.parent.bounds;
   }
@@ -5896,6 +5725,7 @@ class DimensionDrawer extends paper$1.Group {
     return this._ivert || (this._ivert = new DimensionGroup());
   }
 }
+EditorInvisible.DimensionDrawer = DimensionDrawer;
 class DimensionLine extends paper$1.Group {
   constructor(attr) {
     super({parent: attr.parent});
@@ -5920,9 +5750,6 @@ class DimensionLine extends paper$1.Group {
       attr.p2 = 'e';
     }
     Object.assign(_attr, attr);
-    if(attr.impost){
-      _attr.impost = true;
-    }
     if(attr.contour){
       _attr.contour = true;
     }
@@ -5937,7 +5764,7 @@ class DimensionLine extends paper$1.Group {
       parent: this,
       name: 'text',
       justification: 'center',
-      fontFamily: 'Mipgost',
+      fontFamily: consts.font_family,
       fillColor: 'black',
       fontSize: consts.font_size});
     this.on({
@@ -5956,8 +5783,10 @@ class DimensionLine extends paper$1.Group {
   }
   _click(event) {
     event.stop();
-    this.wnd = new RulerWnd(null, this);
-    this.wnd.size = this.size;
+    if(typeof RulerWnd === 'function') {
+      this.wnd = new RulerWnd(null, this);
+      this.wnd.size = this.size;
+    }
   }
   _move_points(event, xy) {
     let _bounds, delta;
@@ -6164,7 +5993,7 @@ class DimensionLine extends paper$1.Group {
     return this.project._scope.eve;
   }
   get size() {
-    return parseFloat(this.children.text.content) || 0;
+    return (this.children.text && parseFloat(this.children.text.content)) || 0;
   }
   set size(v) {
     this.children.text.content = parseFloat(v).round(1);
@@ -6284,18 +6113,19 @@ class DimensionLineCustom extends DimensionLine {
       hide_c2 && children.callout2.setSelection(false);
       hide_line && children.scale.setSelection(false);
     }
-    tool instanceof ToolRuler && tool.wnd.attach(this);
+    typeof ToolRuler === 'function' && tool instanceof ToolRuler && tool.wnd.attach(this);
   }
   _click(event) {
     event.stop();
     const {tool} = this.project._scope;
-    if(tool instanceof ToolRuler){
+    if(tool && typeof ToolRuler === 'function' && tool instanceof ToolRuler){
       this.selected = true;
     }
   }
   _mouseenter() {
     const {_scope} = this.project;
-    if(_scope.tool instanceof ToolRuler){
+    const {tool} = _scope;
+    if(tool && typeof ToolRuler === 'function' && tool instanceof ToolRuler){
       _scope.canvas_cursor('cursor-arrow-ruler');
     }
     else{
@@ -6343,6 +6173,117 @@ class DimensionLineCustom extends DimensionLine {
     else {
       return super.path;
     }
+  }
+}
+EditorInvisible.DimensionLine = DimensionLine;
+EditorInvisible.DimensionLineCustom = DimensionLineCustom;
+class DimensionLineImpost extends DimensionLineCustom {
+  constructor(attr) {
+    attr.row = {
+      cnstr: 1,
+      elm: 1,
+      _owner: {
+        del() {}
+      }
+    };
+    super(attr);
+    new paper$1.PointText({
+      parent: this,
+      name: 'dx1',
+      justification: 'center',
+      fontFamily: consts.font_family,
+      fillColor: 'black',
+      fontSize: consts.font_size});
+    new paper$1.PointText({
+      parent: this,
+      name: 'dx2',
+      justification: 'center',
+      fontFamily: consts.font_family,
+      fillColor: 'black',
+      fontSize: consts.font_size});
+  }
+  get path() {
+    const {children, _attr: {elm1, p1, p2, dx1, dx2}} = this;
+    if(!children.length){
+      return;
+    }
+    const {generatrix} = elm1;
+    let b = generatrix.getPointAt(typeof p1 == 'number' ? dx2 : dx1);
+    let e = generatrix.getPointAt(typeof p1 == 'number' ? dx1 : dx2);
+    if(!b || !e){
+      return;
+    }
+    const path = new paper$1.Path({insert: false, segments: [b, e]});
+    path.offset = 0;
+    return path;
+  }
+  redraw() {
+    const {children, path, offset, _attr: {p1, p2, dx1, dx2, outer}} = this;
+    if(!children.length){
+      return;
+    }
+    if(!path){
+      this.visible = false;
+      return;
+    }
+    this.visible = true;
+    const b = path.firstSegment.point;
+    const e = path.lastSegment.point;
+    const normal = path.getNormalAt(0).multiply((outer ? -1 : 1) * (offset + path.offset));
+    const tangent = path.getTangentAt(0);
+    const ns = normal.normalize(normal.length - 20);
+    const bs = b.add(ns);
+    const es = e.add(ns);
+    if(children.callout1.segments.length){
+      children.callout1.firstSegment.point = b;
+      children.callout1.lastSegment.point = b.add(normal);
+    }
+    else{
+      children.callout1.addSegments([b, b.add(normal)]);
+    }
+    if(children.callout2.segments.length){
+      children.callout2.firstSegment.point = e;
+      children.callout2.lastSegment.point = e.add(normal);
+    }
+    else{
+      children.callout2.addSegments([e, e.add(normal)]);
+    }
+    if(children.scale.segments.length){
+      children.scale.firstSegment.point = bs;
+      children.scale.lastSegment.point = es;
+    }
+    else{
+      children.scale.addSegments([bs, es]);
+    }
+    children.scale.elongation(200);
+    children.text.rotation = children.dx1.rotation = children.dx2.rotation = 0;
+    children.text.content = (typeof p1 == 'number' ? p1 : p2).toFixed(0);
+    children.dx1.content = (dx1).toFixed(0);
+    children.dx2.content = (dx2).toFixed(0);
+    const bdx1 = children.dx1.bounds;
+    const bdx2 = children.dx2.bounds;
+    if(offset > 0) {
+      children.dx1.justification = 'left';
+      children.dx2.justification = 'right';
+      children.dx1.position = bs
+        .add(tangent.normalize(-Math.sign(offset) * ((consts.font_size + bdx1.width) / 2)))
+        .add(normal.normalize(-consts.font_size * 0.6));
+      children.dx2.position = es
+        .add(tangent.normalize(Math.sign(offset) * ((consts.font_size + bdx1.width) / 2)))
+        .add(normal.normalize(-consts.font_size * 0.6));
+    }
+    else {
+      children.dx1.justification = 'right';
+      children.dx2.justification = 'left';
+      children.dx1.position = es
+        .add(tangent.normalize(-Math.sign(offset) * ((consts.font_size + bdx1.width) / 2)))
+        .add(normal.normalize(-consts.font_size * 0.6));
+      children.dx2.position = bs
+        .add(tangent.normalize(Math.sign(offset) * ((consts.font_size + bdx1.width) / 2)))
+        .add(normal.normalize(-consts.font_size * 0.6));
+    }
+    children.text.rotation = children.dx1.rotation = children.dx2.rotation = e.subtract(b).angle;
+    children.text.position = bs.add(es).divide(2).add(normal.normalize(consts.font_size * 0.8));
   }
 }
 class DimensionRadius extends DimensionLineCustom {
@@ -7023,12 +6964,12 @@ class Filling extends AbstractFilling(BuilderElement) {
     const {elm_font_size} = consts;
     path.visible = true;
     imposts.forEach((elm) => elm.redraw());
-    this.purge_path();
+    this.purge_paths();
     if(!_attr._text){
       _attr._text = new paper$1.PointText({
         parent: this,
         fillColor: 'black',
-        fontFamily: 'Mipgost',
+        fontFamily: consts.font_family,
         fontSize: elm_font_size,
         guide: true,
       });
@@ -7123,10 +7064,10 @@ class Filling extends AbstractFilling(BuilderElement) {
     }
     super.set_clr(v);
   }
-  purge_path() {
+  purge_paths() {
     const paths = this.children.filter((child) => child instanceof paper$1.Path);
     const {path} = this;
-    paths.forEach((p) => p != path && p.remove());
+    paths.forEach((p) => p !== path && p.remove());
   }
   fill_error() {
     const {path} = this;
@@ -7180,7 +7121,6 @@ class Filling extends AbstractFilling(BuilderElement) {
     else{
       _attr._profiles = [];
     }
-    let needPurge;
     if(attr instanceof paper$1.Path){
       path.addSegments(attr.segments);
     }
@@ -7235,14 +7175,24 @@ class Filling extends AbstractFilling(BuilderElement) {
         path.addSegments(curr.sub_path.segments);
         ["anext","pb","pe"].forEach((prop) => { delete curr[prop]; });
         _attr._profiles.push(curr);
-        if(!needPurge){
-          needPurge = Math.abs(curr.angle_hor % 90) < 0.2;
-        }
       }
     }
-    if(needPurge || path.hasHandles()) ;
     if(path.segments.length && !path.closed){
       path.closePath(true);
+    }
+    const intersections = path.self_intersections();
+    if(intersections.length) {
+      const purge = new Set();
+      for(const {point} of intersections) {
+        for(const rib of attr) {
+          rib._sub.b.is_nearest(point, true) && rib._sub.e.is_nearest(point, true) && purge.add(rib);
+        }
+      }
+      purge.forEach((rib) => {
+        const ind = attr.indexOf(rib);
+        attr.splice(ind, 1);
+      });
+      return this.path = attr;
     }
     path.reduce();
   }
@@ -7373,7 +7323,7 @@ class FreeText extends paper$1.PointText {
     if(!attr.fontSize){
       attr.fontSize = consts.font_size;
     }
-    attr.fontFamily = 'Mipgost';
+    attr.fontFamily = consts.font_family;
     super(attr);
     if(attr.row){
       this._row = attr.row;
@@ -7820,9 +7770,14 @@ class Magnetism {
           const rSegm = (segm.outer ? segm.profile.rays.outer : segm.profile.rays.inner).equidistant(-segm.profile.nom.sizefaltz);
           const rNext = (pNext.outer ? pNext.profile.rays.outer : pNext.profile.rays.inner).equidistant(-pNext.profile.nom.sizefaltz);
           const rOur = (pOur.outer ? pOur.profile.rays.outer : pOur.profile.rays.inner).equidistant(-pOur.profile.nom.sizefaltz);
-          const p0 = rSegm.intersect_point(rNext, selected.point);
-          const p1 = rSegm.intersect_point(rOur, selected.point);
-          const delta = p0.subtract(p1);
+          const ps = rSegm.intersect_point(rOur, spoint);
+          const be = ps.getDistance(segm.profile.b) > ps.getDistance(segm.profile.e) ? 'e' : 'b';
+          const da = rSegm.angle_to(rNext, segm.profile[be]);
+          let p0 = rSegm.intersect_point(rNext, ps);
+          if(!p0 || da < 4) {
+            p0 = rNext.getNearestPoint(segm.profile[be]);
+          }
+          const delta = p0.subtract(ps);
           selected.profile.move_points(delta, true);
         }
         else {
@@ -7847,26 +7802,43 @@ Object.defineProperties(paper$1.Path.prototype, {
       return this.getTangentAt(offset).getDirectedAngle(point.add(np.negate()));
     }
   },
-  is_self_intersected: {
-    value() {
+  self_intersections: {
+    value(first) {
       const {curves} = this;
-      return curves.some((crv1, i1) => {
+      const res = [];
+      curves.some((crv1, i1) => {
         return curves.some((crv2, i2) => {
+          if(i2 <= i1) {
+            return;
+          }
           const intersections = crv1.getIntersections(crv2);
           if(intersections.length) {
-            if(intersections.length > 1) {
-              return true;
-            }
             const {point} = intersections[0];
+            if(intersections.length > 1) {
+              res.push({crv1, crv2, point});
+              if(first) {
+                return true;
+              }
+            }
             if(crv2.point1.is_nearest(crv1.point2, 0) && point.is_nearest(crv1.point2, 0)) {
-              return false;
+              return;
             }
             if(crv1.point1.is_nearest(crv2.point2, 0) && point.is_nearest(crv1.point1, 0)) {
-              return false;
+              return;
             }
-            return true;
-          }        })
-      })
+            res.push({crv1, crv2, point});
+            if(first) {
+              return true;
+            }
+          }
+        });
+      });
+      return res;
+    }
+  },
+  is_self_intersected: {
+    value() {
+      return this.self_intersections(true).length > 0;
     }
   },
   angle_to: {
@@ -7887,23 +7859,26 @@ Object.defineProperties(paper$1.Path.prototype, {
       enumerable : false
     },
   is_linear: {
-      value() {
-        if(this.curves.length == 1 && this.firstCurve.isLinear())
-          return true;
-        else if(this.hasHandles())
-          return false;
-        else{
-          var curves = this.curves,
-            da = curves[0].point1.getDirectedAngle(curves[0].point2), dc;
-          for(var i = 1; i < curves.lenght; i++){
-            dc = curves[i].point1.getDirectedAngle(curves[i].point2);
-            if(Math.abs(dc - da) > consts.epsilon)
-              return false;
-          }
-        }
+    value() {
+      const {curves, firstCurve} = this;
+      if(curves.length == 1 && firstCurve.isLinear()) {
         return true;
       }
-    },
+      else if(this.hasHandles()) {
+        return false;
+      }
+      else {
+        const da = firstCurve.point1.getDirectedAngle(firstCurve.point2);
+        for (let i = 1; i < curves.length; i++) {
+          const dc = curves[i].point1.getDirectedAngle(curves[i].point2);
+          if(Math.abs(dc - da) > consts.epsilon) {
+            return false;
+          }
+        }
+      }
+      return true;
+    }
+  },
   is_nearest: {
     value(point, sticking) {
       return point.is_nearest(this.getNearestPoint(point), sticking);
@@ -8125,39 +8100,45 @@ Object.defineProperties(paper$1.Point.prototype, {
 		}
 	},
 	arc_cntr: {
-		value(x1,y1, x2,y2, r0, ccw){
-			var a,b,p,r,q,yy1,xx1,yy2,xx2;
-			if(ccw){
-				var tmpx=x1, tmpy=y1;
-				x1=x2; y1=y2; x2=tmpx; y2=tmpy;
-			}
-			if (x1!=x2){
-				a=(x1*x1 - x2*x2 - y2*y2 + y1*y1)/(2*(x1-x2));
-				b=((y2-y1)/(x1-x2));
-				p=b*b+ 1;
-				r=-2*((x1-a)*b+y1);
-				q=(x1-a)*(x1-a) - r0*r0 + y1*y1;
-				yy1=(-r + Math.sqrt(r*r - 4*p*q))/(2*p);
-				xx1=a+b*yy1;
-				yy2=(-r - Math.sqrt(r*r - 4*p*q))/(2*p);
-				xx2=a+b*yy2;
-			} else{
-				a=(y1*y1 - y2*y2 - x2*x2 + x1*x1)/(2*(y1-y2));
-				b=((x2-x1)/(y1-y2));
-				p=b*b+ 1;
-				r=-2*((y1-a)*b+x1);
-				q=(y1-a)*(y1-a) - r0*r0 + x1*x1;
-				xx1=(-r - Math.sqrt(r*r - 4*p*q))/(2*p);
-				yy1=a+b*xx1;
-				xx2=(-r + Math.sqrt(r*r - 4*p*q))/(2*p);
-				yy2=a+b*xx2;
-			}
-			if (new paper$1.Point(xx1,yy1).point_pos(x1,y1, x2,y2)>0)
-				return {x: xx1, y: yy1};
-			else
-				return {x: xx2, y: yy2}
-		}
-	},
+    value(x1, y1, x2, y2, r0, ccw) {
+      let a, b, p, r, q, yy1, xx1, yy2, xx2;
+      if(ccw) {
+        const tmpx = x1, tmpy = y1;
+        x1 = x2;
+        y1 = y2;
+        x2 = tmpx;
+        y2 = tmpy;
+      }
+      if(x1 != x2) {
+        a = (x1 * x1 - x2 * x2 - y2 * y2 + y1 * y1) / (2 * (x1 - x2));
+        b = ((y2 - y1) / (x1 - x2));
+        p = b * b + 1;
+        r = -2 * ((x1 - a) * b + y1);
+        q = (x1 - a) * (x1 - a) - r0 * r0 + y1 * y1;
+        yy1 = (-r + Math.sqrt(r * r - 4 * p * q)) / (2 * p);
+        xx1 = a + b * yy1;
+        yy2 = (-r - Math.sqrt(r * r - 4 * p * q)) / (2 * p);
+        xx2 = a + b * yy2;
+      }
+      else {
+        a = (y1 * y1 - y2 * y2 - x2 * x2 + x1 * x1) / (2 * (y1 - y2));
+        b = ((x2 - x1) / (y1 - y2));
+        p = b * b + 1;
+        r = -2 * ((y1 - a) * b + x1);
+        q = (y1 - a) * (y1 - a) - r0 * r0 + x1 * x1;
+        xx1 = (-r - Math.sqrt(r * r - 4 * p * q)) / (2 * p);
+        yy1 = a + b * xx1;
+        xx2 = (-r + Math.sqrt(r * r - 4 * p * q)) / (2 * p);
+        yy2 = a + b * xx2;
+      }
+      if(new paper$1.Point(xx1, yy1).point_pos(x1, y1, x2, y2) > 0) {
+        return {x: xx1, y: yy1};
+      }
+      else {
+        return {x: xx2, y: yy2}
+      }
+    }
+  },
 	arc_point: {
 		value(x1,y1, x2,y2, r, arc_ccw, more_180){
 			const point = {x: (x1 + x2) / 2, y: (y1 + y2) / 2};
@@ -8446,22 +8427,22 @@ class ProfileItem extends GeneratrixElement {
     return this.cnn_point('b').cnn || $p.cat.cnns.get();
   }
   set cnn1(v) {
-    const {rays, project} = this;
+    const {rays} = this;
     const cnn = $p.cat.cnns.get(v);
     if(rays.b.cnn != cnn) {
       rays.b.cnn = cnn;
-      project.register_change();
+      this.project.register_change();
     }
   }
   get cnn2() {
     return this.cnn_point('e').cnn || $p.cat.cnns.get();
   }
   set cnn2(v) {
-    const {rays, project} = this;
+    const {rays} = this;
     const cnn = $p.cat.cnns.get(v);
     if(rays.e.cnn != cnn) {
       rays.e.cnn = cnn;
-      project.register_change();
+      this.project.register_change();
     }
   }
   angle_at(p) {
@@ -8503,12 +8484,12 @@ class ProfileItem extends GeneratrixElement {
     return this._row.r;
   }
   set r(v) {
-    const {_row, _attr, project} = this;
+    const {_row, _attr} = this;
     if(_row.r != v) {
       _attr._rays.clear();
       _row.r = v;
       this.set_generatrix_radius();
-      project.notify(this, 'update', {r: true, arc_h: true, arc_ccw: true});
+      this.project.notify(this, 'update', {r: true, arc_h: true, arc_ccw: true});
     }
   }
   get rmin() {
@@ -8521,12 +8502,12 @@ class ProfileItem extends GeneratrixElement {
     return this._row.arc_ccw;
   }
   set arc_ccw(v) {
-    const {_row, _attr, project} = this;
+    const {_row, _attr} = this;
     if(_row.arc_ccw != v) {
       _attr._rays.clear();
       _row.arc_ccw = v;
       this.set_generatrix_radius();
-      project.notify(this, 'update', {r: true, arc_h: true, arc_ccw: true});
+      this.project.notify(this, 'update', {r: true, arc_h: true, arc_ccw: true});
     }
   }
   get arc_h() {
@@ -8551,7 +8532,7 @@ class ProfileItem extends GeneratrixElement {
       }
       _row.r = b.arc_r(b.x, b.y, e.x, e.y, v);
       this.set_generatrix_radius(v);
-      project.notify(this, 'update', {r: true, arc_h: true, arc_ccw: true});
+      this.project.notify(this, 'update', {r: true, arc_h: true, arc_ccw: true});
     }
   }
   get angle_hor() {
@@ -8725,11 +8706,10 @@ class ProfileItem extends GeneratrixElement {
     }
   }
   save_coordinates() {
-    const {_attr, _row, rays, generatrix, project} = this;
+    const {_attr, _row, rays, generatrix, project: {cnns}} = this;
     if(!generatrix) {
       return;
     }
-    const {cnns} = project;
     const b = rays.b;
     const e = rays.e;
     const row_b = cnns.add({
@@ -8872,7 +8852,7 @@ class ProfileItem extends GeneratrixElement {
     rays.outer.getNearestPoint(interior).getDistance(interior, true) ? $p.enm.cnn_sides.Изнутри : $p.enm.cnn_sides.Снаружи;
   }
   set_generatrix_radius(height) {
-    const {generatrix, _row, layer, project, selected} = this;
+    const {generatrix, _row, layer, selected} = this;
     const b = generatrix.firstSegment.point.clone();
     const e = generatrix.lastSegment.point.clone();
     const min_radius = b.getDistance(e) / 2;
@@ -9369,10 +9349,33 @@ class ProfileItem extends GeneratrixElement {
     });
     return this;
   }
+  mark_direction() {
+    const {generatrix, rays: {inner, outer}} = this;
+    const gb = generatrix.getPointAt(130);
+    const ge = generatrix.getPointAt(230);
+    const ib = inner.getNearestPoint(gb);
+    const ie = inner.getNearestPoint(ge);
+    const ob = outer.getNearestPoint(gb);
+    const oe = outer.getNearestPoint(ge);
+    const b = ib.add(ob).divide(2);
+    const e = ie.add(oe).divide(2);
+    const c = b.add(e).divide(2);
+    const n = e.subtract(b).rotate(90).normalize(10);
+    const c1 = c.add(n);
+    const c2 = c.subtract(n);
+    const path = new paper$1.Path({
+      parent: this,
+      segments: [b, e, c1, c2, e],
+      strokeColor: 'darkblue',
+      strokeCap: 'round',
+      strokeWidth: 2,
+      strokeScaling: false,
+    });
+  }
   corns(corn) {
     const {_corns} = this._attr;
     if(typeof corn == 'number') {
-      return _corns[corn];
+      return corn < 10 ? _corns[corn] : this.generatrix.getPointAt(corn);
     }
     else if(corn instanceof paper$1.Point) {
       const res = {dist: Infinity, profile: this};
@@ -10353,8 +10356,8 @@ class Scheme extends paper$1.Project {
     const _changes = this._ch = [];
     this._dp = $p.dp.buyers_order.create();
     this.magnetism = new Magnetism(this);
+    const isBrowser = typeof requestAnimationFrame === 'function';
     this.redraw = () => {
-      const isBrowser = typeof requestAnimationFrame === 'function';
       _attr._opened && !_attr._silent && _scheme._scope && isBrowser && requestAnimationFrame(_scheme.redraw);
       if(!_attr._opened || _attr._saving || !_changes.length) {
         return;
@@ -10363,7 +10366,7 @@ class Scheme extends paper$1.Project {
       const {contours} = _scheme;
       if(contours.length) {
         _scheme.l_connective.redraw();
-        isBrowser && contours[0].refresh_prm_links(true);
+        isBrowser && !_attr._silent && contours[0].refresh_prm_links(true);
         for (let contour of contours) {
           contour.redraw();
           if(_changes.length) {
@@ -10599,9 +10602,7 @@ class Scheme extends paper$1.Project {
       });
     }
     _attr._loading = true;
-    if(id != this.ox) {
-      this.ox = null;
-    }
+    this.ox = null;
     this.clear();
     if($p.utils.is_data_obj(id) && id.calc_order && !id.calc_order.is_new()) {
       return load_object(id);
@@ -10799,7 +10800,7 @@ class Scheme extends paper$1.Project {
         }
       }
       else if(item instanceof Filling) {
-        item.purge_path();
+        item.purge_paths();
       }
     }
     other.length && this.do_align(auto_align, profiles);
@@ -10848,7 +10849,7 @@ class Scheme extends paper$1.Project {
         view.center = center.add([dx, -dy]);
       }
       else {
-        view.center = center.add([dx, 50]);
+        view.center = center.add([dx / 2, 50]);
       }
     }
   }
@@ -11310,7 +11311,7 @@ class Scheme extends paper$1.Project {
 class EditableText extends paper$1.PointText {
   constructor(props) {
     props.justification = 'center';
-    props.fontFamily = 'Mipgost';
+    props.fontFamily = consts.font_family;
     super(props);
     this._edit = null;
     this._owner = props._owner;
@@ -11588,27 +11589,6 @@ class Sectional extends GeneratrixElement {
   }
 }
 EditorInvisible.Sectional = Sectional;
-const consts = new function Settings(){
-	this.tune_paper = function (settings) {
-	  const builder = $p.job_prm.builder || {};
-		settings.handleSize = builder.handle_size;
-		this.sticking = builder.sticking || 90;
-		this.sticking_l = builder.sticking_l || 9;
-		this.sticking0 = this.sticking / 2;
-		this.sticking2 = this.sticking * this.sticking;
-		this.font_size = builder.font_size || 72;
-    this.elm_font_size = builder.elm_font_size || 52;
-    if($p.wsql.alasql.utils.isNode) {
-      this.font_size *= 1.2;
-      this.elm_font_size *= 1.2;
-    }
-		this.orientation_delta = builder.orientation_delta || 30;
-	}.bind(this);
-  this.epsilon = 0.01;
-	this.move_points = 'move_points';
-	this.move_handle = 'move_handle';
-	this.move_shapes = 'move-shapes';
-};
 class Pricing {
   constructor($p$$1) {
     $p$$1.md.once("predefined_elmnts_inited", () => {
@@ -11624,7 +11604,7 @@ class Pricing {
               since: 'now',
               live: true,
               include_docs: true,
-              selector: {class_name: {$in: ['doc.nom_prices_setup', 'doc.calc_order', 'cat.formulas']}}
+              selector: {class_name: {$in: ['doc.nom_prices_setup', 'doc.calc_order']}}
             }).on('change', (change) => {
               if(change.doc.class_name == 'doc.nom_prices_setup'){
                 setTimeout(() => {
