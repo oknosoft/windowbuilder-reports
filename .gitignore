@@ -3,3 +3,5 @@
 node_modules/
 /package-lock.json
 /index.js.map
+/src/builder/drawer.js
+/src/metadata/init.js
