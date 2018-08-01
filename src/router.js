@@ -3,7 +3,7 @@
 const debug = require('debug')('wb:router');
 debug('start');
 
-import builder from './windowbuilder';
+import builder from './builder';
 
 import Router from 'koa-better-router';
 const rep = Router({ prefix: '/r' });

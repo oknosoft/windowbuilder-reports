@@ -1,7 +1,3 @@
-delete Contour.prototype.refresh_links;
-Contour.prototype.refresh_links = function () {
-
-};
 
 // формирует структуру с эскизами заполнений
 async function glasses({project, view, prod, res}) {
@@ -35,7 +31,7 @@ async function glasses({project, view, prod, res}) {
 // формирует json описания продукции с эскизами
 async function prod(ctx, next) {
 
-  const {project, view} = new Editor();
+  const {project, view} = new $p.Editor();
   const {nom} = $p.cat;
   const calc_order = await $p.doc.calc_order.get(ctx.params.ref, 'promise');
   const prod = await calc_order.load_production(true);
@@ -125,7 +121,7 @@ async function array(ctx, next) {
   const grouped = $p.wsql.alasql('SELECT calc_order, product, elm FROM ? GROUP BY ROLLUP(calc_order, product, elm)', [JSON.parse(ctx.params.ref)]);
   const res = [];
 
-  const {project, view} = new Editor();
+  const {project, view} = new $p.Editor();
 
   let calc_order, ox, fragmented;
   for(let img of grouped) {
