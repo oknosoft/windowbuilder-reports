@@ -21,15 +21,6 @@ debug('created');
 // параметры сеанса инициализируем сразу
 $p.wsql.init(settings);
 
-// // эмулируем излучатель событий dhtmlx
-// import dhtmlx_eve from './dhtmlx_eve';
-// dhtmlx_eve($p);
-
-// обеспечиваем совместимость DataManager с v0.12
-// import meta_pouchdb from './meta_pouchdb';
-// meta_pouchdb($p.classes.DataManager.prototype);
-
-
 // инициализируем параметры сеанса и метаданные
 (async () => {
 
@@ -45,8 +36,6 @@ $p.wsql.init(settings);
 
   // // подключим модификаторы
   // modifiers($p);
-  // modifiersNew($p);
-
 
   // загружаем кешируемые справочники в ram и начинаем следить за изменениями ram
   pouch.log_in(user_node.username, user_node.password)
@@ -81,8 +70,7 @@ $p.wsql.init(settings);
         debug(`change error ${err}`);
       });
       debug(`loadind to ram: READY`);
-      // обычно, это событие генерирует модуль pricing после загрузки цен, но в данном сервисе цены не нужны
-      pouch.emit('pouch_complete_loaded');
+
     },
   });
 

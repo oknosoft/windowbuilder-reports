@@ -1,5 +1,5 @@
 /*!
- windowbuilder-reports v2.0.241, built:2018-08-01
+ windowbuilder-reports v2.0.241, built:2018-08-02
  © 2014-2018 Evgeniy Malyarov and the Oknosoft team http://www.oknosoft.ru
  To obtain commercial license and technical support, contact info@oknosoft.ru
  */
@@ -13,6 +13,8 @@ var metaCore = _interopDefault(require('metadata-core'));
 var metaPouchdb = _interopDefault(require('metadata-pouchdb'));
 var paper = _interopDefault(require('paper/dist/paper-core'));
 var Router = _interopDefault(require('koa-better-router'));
+var Koa = _interopDefault(require('koa'));
+var cors = _interopDefault(require('@koa/cors'));
 
 const debug = require('debug')('wb:meta');
 const MetaEngine = metaCore.plugin(metaPouchdb);
@@ -57,7 +59,6 @@ $p$1.wsql.init(settings);
         debug(`change error ${err}`);
       });
       debug(`loadind to ram: READY`);
-      pouch.emit('pouch_complete_loaded');
     },
   });
 })();
@@ -257,8 +258,6 @@ class Editor extends EditorInvisible {
     }
   }
 }
-delete Editor.Contour.prototype.refresh_links;
-Editor.Contour.prototype.refresh_links = function () {};
 $p$1.Editor = Editor;
 
 const debug$2 = require('debug')('wb:router');
@@ -271,9 +270,7 @@ rep.loadMethods()
   })
   .get('/img/:class/:ref', executer);
 
-const Koa = require('koa');
 const app = new Koa();
-const cors = require('@koa/cors');
 app.use(cors({credentials: true, maxAge: 600}));
 app.use(rep.middleware());
 app.listen(process.env.PORT || 3030);

@@ -1,10 +1,10 @@
 'use strict';
 
-const Koa = require('koa');
+import Koa from 'koa';
 const app = new Koa();
 
 // Register the cors as Koa middleware
-const cors = require('@koa/cors');
+import cors from '@koa/cors';
 app.use(cors({credentials: true, maxAge: 600}));
 
 // Register the router as Koa middleware

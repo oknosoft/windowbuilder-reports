@@ -9516,7 +9516,7 @@ class Pricing {
 
     md.once('predefined_elmnts_inited', () => {
       const {pouch} = adapters;
-      if(pouch.local.templates) {
+      if(pouch.local.templates || pouch.props.user_node) {
         this.load_prices();
       }
       else {
@@ -9541,12 +9541,10 @@ class Pricing {
             since: 'now',
             live: true,
             include_docs: true,
-            selector: {class_name: {$in: ['doc.nom_prices_setup', 'doc.calc_order']}}
+            selector: pouch.props.user_node ? {class_name: 'doc.nom_prices_setup'} : {class_name: {$in: ['doc.nom_prices_setup', 'doc.calc_order']}}
           }).on('change', (change) => {
             if(change.doc.class_name == 'doc.nom_prices_setup'){
-              setTimeout(() => {
-                this.by_doc(change.doc)
-              }, 1000);
+              setTimeout(() => this.by_doc(change.doc), 500);
             }
             else if(change.doc.class_name == 'doc.calc_order'){
               const doc = $p.doc.calc_order.by_ref[change.id.substr(15)];
@@ -9661,6 +9659,10 @@ class Pricing {
   by_local(step = 0) {
     const {pouch} = $p.adapters;
 
+    if(!pouch.local.templates) {
+      return Promise.resolve(false);
+    }
+
     const pre = step === 0 && pouch.local.templates.adapter !== 'http' && pouch.authorized ?
       pouch.remote.templates.info()
         .then(() => this.sync_local(pouch))
@@ -9691,7 +9693,10 @@ class Pricing {
 
   by_range(startkey, step = 0) {
 
-    return $p.adapters.pouch.local.templates.query('doc/doc_nom_prices_setup_slice_last',
+    const {pouch} = $p.adapters;
+    const {templates, doc} = pouch.local;
+
+    return (templates || doc).query('doc/doc_nom_prices_setup_slice_last',
       {
         limit: 600,
         include_docs: false,
@@ -9702,7 +9707,7 @@ class Pricing {
       })
       .then((res) => {
         this.build_cache(res.rows);
-        $p.adapters.pouch.emit('nom_prices', ++step);
+        pouch.emit('nom_prices', ++step);
         if (res.rows.length === 600) {
           return this.by_range(res.rows[res.rows.length - 1].key, step);
         }

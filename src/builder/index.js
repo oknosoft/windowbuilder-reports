@@ -41,8 +41,6 @@ class Editor extends EditorInvisible {
   }
 }
 
-delete Editor.Contour.prototype.refresh_links;
-Editor.Contour.prototype.refresh_links = function () {};
 $p.Editor = Editor;
 
 export default executer;
