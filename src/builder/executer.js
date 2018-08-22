@@ -118,10 +118,19 @@ async function prod(ctx, next) {
 async function array(ctx, next) {
 
 // отсортировать по заказам и изделиям
-  const grouped = $p.wsql.alasql('SELECT calc_order, product, elm FROM ? GROUP BY ROLLUP(calc_order, product, elm)', [JSON.parse(ctx.params.ref)]);
+  const prms = JSON.parse(ctx.params.ref);
+  const grouped = $p.wsql.alasql('SELECT calc_order, product, elm FROM ? GROUP BY ROLLUP(calc_order, product, elm)', [prms]);
   const res = [];
-
   const {project, view} = new $p.Editor();
+
+  function builder_props({calc_order, product}) {
+    for(const prm of prms) {
+      if(calc_order === prm.calc_order && product === prm.product) {
+        return prm.builder_props || true;
+      }
+    }
+    return true;
+  }
 
   let calc_order, ox, fragmented;
   for(let img of grouped) {
@@ -143,7 +152,7 @@ async function array(ctx, next) {
       const row = calc_order.production.get(img.product-1);
       if(row){
         ox = await calc_order.production.get(img.product-1).characteristic.load();
-        await project.load(ox, true);
+        await project.load(ox, builder_props(img));
         fragmented = false;
       }
       else{
@@ -158,7 +167,7 @@ async function array(ctx, next) {
 
     if(img.elm == 0){
       if(fragmented){
-        await project.load(ox, true);
+        await project.load(ox, builder_props(img));
       }
     }
     else{
