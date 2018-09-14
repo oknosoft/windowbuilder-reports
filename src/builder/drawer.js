@@ -2376,6 +2376,9 @@ class DimensionDrawer extends paper.Group {
 
     const by_side = parent.profiles_by_side();
 
+    if (!Object.entries(by_side).length) {
+      return { ihor: [], ivert: [], by_side:{} };
+    }
 
     const ihor = [
       {
