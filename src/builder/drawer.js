@@ -2466,6 +2466,9 @@ class DimensionLine extends paper.Group {
       return null;
     }
 
+    const { width, height } = this.project.bounds;
+    const size = Math.max(width, height) / 100;
+
     new paper.Path({parent: this, name: 'callout1', strokeColor: 'black', guide: true});
     new paper.Path({parent: this, name: 'callout2', strokeColor: 'black', guide: true});
     new paper.Path({parent: this, name: 'scale', strokeColor: 'black', guide: true});
@@ -2475,7 +2478,7 @@ class DimensionLine extends paper.Group {
       justification: 'center',
       fontFamily: consts.font_family,
       fillColor: 'black',
-      fontSize: consts.font_size});
+      fontSize: consts.font_size + size});
 
     this.on({
       mouseenter: this._mouseenter,
@@ -4384,6 +4387,10 @@ class FreeText extends paper.PointText {
         this.y = _row.y1;
       }
     }
+
+    const { x, y } = _row._owner._owner;
+    const size = Math.max(x, x) / 20;
+    this.font_size += size;
 
     this.bringToFront();
 
@@ -9436,8 +9443,10 @@ class Sectional extends GeneratrixElement {
 
   redraw() {
     const {layer, generatrix, _attr} = this;
-    const {children, zoom, radius} = _attr;
+    const {children, zoom} = _attr;
     const {segments, curves} = generatrix;
+    const { height, width } = generatrix.bounds;
+    const radius = _attr.radius + Math.max(width, height) / 60;
 
     for(let child of children){
       child.remove();
@@ -9465,13 +9474,15 @@ class Sectional extends GeneratrixElement {
 
   draw_angle(ind) {
     const {layer, generatrix, _attr} = this;
-    const {children, zoom, radius} = _attr;
+    const {children, zoom} = _attr;
     const {curves} = generatrix;
     const c1 = curves[ind - 1];
     const c2 = curves[ind];
     const loc1 = c1.getLocationAtTime(0.9);
     const loc2 = c2.getLocationAtTime(0.1);
     const center = c1.point2;
+    const { height, width } = generatrix.bounds;
+    const radius = _attr.radius + Math.max(width, height) / 60;
     let angle = loc2.tangent.angle - loc1.tangent.negate().angle;
     if(angle < 0){
       angle += 360;
