@@ -1,5 +1,5 @@
 /*!
- windowbuilder-reports v2.0.241, built:2018-08-25
+ windowbuilder-reports v2.0.242, built:2018-09-19
  © 2014-2018 Evgeniy Malyarov and the Oknosoft team http://www.oknosoft.ru
  To obtain commercial license and technical support, contact info@oknosoft.ru
  */
@@ -227,7 +227,6 @@ var executer = async (ctx, next) => {
     ctx.body = 'ip restricted: ' + ip;
     return;
   }
-  console.log(ctx.params);
   try{
     switch (ctx.params.class){
       case 'doc.calc_order':
@@ -243,7 +242,7 @@ var executer = async (ctx, next) => {
   catch(err){
     ctx.status = 500;
     ctx.body = err.stack;
-    console.log(err);
+    console.error(err);
   }
 };
 

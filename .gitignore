@@ -9,5 +9,3 @@ package-lock.json
 
 # Exclude compiled files
 /index.js.map
-/src/builder/drawer.js
-/src/metadata/init.js

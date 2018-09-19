@@ -25,6 +25,7 @@ const consts = {
 		this.font_size = builder.font_size || 90;
     this.font_family = builder.font_family || 'GOST type B';
     this.elm_font_size = builder.elm_font_size || 60;
+    this.cutoff = builder.cutoff || 1300; 
 
     if(!builder.font_family) {
       builder.font_family = this.font_family;
@@ -167,7 +168,7 @@ const AbstractFilling = (superclass) => class extends superclass {
           return true;
         }
       })
-    }
+    };
 
     if (profiles.length) {
       profiles.forEach((profile) => {
@@ -222,7 +223,7 @@ const AbstractFilling = (superclass) => class extends superclass {
     return bounds;
   }
 
-}
+};
 
 
 
@@ -2375,7 +2376,9 @@ class DimensionDrawer extends paper.Group {
     const {bounds} = parent;
 
     const by_side = parent.profiles_by_side();
-
+    if(!Object.keys(by_side).length) {
+      return {ihor: [], ivert: [], by_side: {}};
+    }
 
     const ihor = [
       {
@@ -2470,15 +2473,22 @@ class DimensionLine extends paper.Group {
       parent: this,
       name: 'text',
       justification: 'center',
-      fontFamily: consts.font_family,
       fillColor: 'black',
-      fontSize: consts.font_size});
+      fontFamily: consts.font_family,
+      fontSize: this._font_size()});
 
     this.on({
       mouseenter: this._mouseenter,
       click: this._click
     });
 
+  }
+
+  _font_size() {
+    const {width, height} = this.project.bounds;
+    const {cutoff, font_size} = consts;
+    const size = Math.max(width - cutoff, height - cutoff) / 60;
+    return font_size + (size > 0 ? size : 0);
   }
 
   _metadata() {
@@ -2664,18 +2674,21 @@ class DimensionLine extends paper.Group {
     children.text.content = length.toFixed(0);
     children.text.rotation = e.subtract(b).angle;
     children.text.justification = align.ref;
+
+    const font_size = this._font_size();
+    children.text.fontSize = font_size;
     if(align == $p.enm.text_aligns.left) {
       children.text.position = bs
-        .add(path.getTangentAt(0).multiply(consts.font_size))
-        .add(path.getNormalAt(0).multiply(consts.font_size / ($p.wsql.alasql.utils.isNode ? 1.3 : 2)));
+        .add(path.getTangentAt(0).multiply(font_size))
+        .add(path.getNormalAt(0).multiply(font_size / ($p.wsql.alasql.utils.isNode ? 1.3 : 2)));
     }
     else if(align == $p.enm.text_aligns.right) {
       children.text.position = es
-        .add(path.getTangentAt(0).multiply(-consts.font_size))
-        .add(path.getNormalAt(0).multiply(consts.font_size / ($p.wsql.alasql.utils.isNode ? 1.3 : 2)));
+        .add(path.getTangentAt(0).multiply(-font_size))
+        .add(path.getNormalAt(0).multiply(font_size / ($p.wsql.alasql.utils.isNode ? 1.3 : 2)));
     }
     else {
-      children.text.position = bs.add(es).divide(2).add(path.getNormalAt(0).multiply(consts.font_size / ($p.wsql.alasql.utils.isNode ? 1.3 : 2)));
+      children.text.position = bs.add(es).divide(2).add(path.getNormalAt(0).multiply(font_size / ($p.wsql.alasql.utils.isNode ? 1.3 : 2)));
     }
   }
 
@@ -4046,12 +4059,46 @@ class Filling extends AbstractFilling(BuilderElement) {
     });
   }
 
-  get profiles() {
-    return this._attr._profiles || [];
+  formula(by_art) {
+    let res;
+    this.project.ox.glass_specification.find_rows({elm: this.elm}, (row) => {
+      let {name, article} = row.inset;
+      const aname = row.inset.name.split(' ');
+      if(by_art && article){
+        name = article;
+      }
+      else if(aname.length){
+        name = aname[0];
+      }
+      if(!res){
+        res = name;
+      }
+      else{
+        res += (by_art ? '*' : 'x') + name;
+      }
+    });
+    return res || (by_art ? this.inset.article || this.inset.name : this.inset.name);
+  }
+
+  deselect_onlay_points() {
+    for(const {generatrix} of this.imposts) {
+      generatrix.segments.forEach((segm) => {
+        if(segm.selected) {
+          segm.selected = false;
+        }
+      });
+      if(generatrix.selected) {
+        generatrix.selected = false;
+      }
+    }
   }
 
   get imposts() {
     return this.getItems({class: Onlay});
+  }
+
+  get profiles() {
+    return this._attr._profiles || [];
   }
 
   remove_onlays() {
@@ -4227,6 +4274,55 @@ class Filling extends AbstractFilling(BuilderElement) {
     return path ? path.bounds : new paper.Rectangle();
   }
 
+  perimeter_inner(size = 0) {
+    const {center} = this.bounds;
+    const res = this.outer_profiles.map((curr) => {
+      const profile = curr.profile || curr.elm;
+      const {inner, outer} = profile.rays;
+      const sub_path = inner.getNearestPoint(center).getDistance(center, true) < outer.getNearestPoint(center).getDistance(center, true) ?
+        inner.get_subpath(inner.getNearestPoint(curr.b), inner.getNearestPoint(curr.e)) :
+        outer.get_subpath(outer.getNearestPoint(curr.b), outer.getNearestPoint(curr.e));
+      let angle = curr.e.subtract(curr.b).angle.round(1);
+      if(angle < 0) angle += 360;
+      return {
+        profile,
+        sub_path,
+        angle,
+        b: curr.b,
+        e: curr.e,
+      };
+    });
+    const ubound = res.length - 1;
+    return res.map((curr, index) => {
+      let sub_path = curr.sub_path.equidistant(size);
+      const prev = !index ? res[ubound] : res[index - 1];
+      const next = (index == ubound) ? res[0] : res[index + 1];
+      const b = sub_path.intersect_point(prev.sub_path.equidistant(size), curr.b, true);
+      const e = sub_path.intersect_point(next.sub_path.equidistant(size), curr.e, true);
+      if (b && e) {
+        sub_path = sub_path.get_subpath(b, e);
+      }
+      return {
+        profile: curr.profile,
+        angle: curr.angle,
+        len: sub_path.length,
+        sub_path,
+      };
+    });
+  }
+
+  bounds_light(size = 0) {
+    const path = new paper.Path({insert: false});
+    for (const {sub_path} of this.perimeter_inner(size)) {
+      path.addSegments(sub_path.segments);
+    }
+    if (path.segments.length && !path.closed) {
+      path.closePath(true);
+    }
+    path.reduce();
+    return path.bounds;
+  }
+
   get x1() {
     return (this.bounds.left - this.project.bounds.x).round(1);
   }
@@ -4272,27 +4368,6 @@ class Filling extends AbstractFilling(BuilderElement) {
 
   get default_clr_str() {
     return "#def,#d0ddff,#eff";
-  }
-
-  formula(by_art) {
-    let res;
-    this.project.ox.glass_specification.find_rows({elm: this.elm}, (row) => {
-      let {name, article} = row.inset;
-      const aname = row.inset.name.split(' ');
-      if(by_art && article){
-        name = article;
-      }
-      else if(aname.length){
-        name = aname[0];
-      }
-      if(!res){
-        res = name;
-      }
-      else{
-        res += (by_art ? '*' : 'x') + name;
-      }
-    });
-    return res || (by_art ? this.inset.article || this.inset.name : this.inset.name);
   }
 
   get ref() {
@@ -4729,6 +4804,219 @@ class GeneratrixElement extends BuilderElement {
 }
 
 
+class GridCoordinates extends paper.Group {
+
+  constructor(attr) {
+    super();
+    this.parent = this.project.l_dimensions;
+
+    const points_color = new paper.Color(0, 0.7, 0, 0.8);
+    const lines_color = new paper.Color(0, 0, 0.7, 0.8);
+
+    this._attr = {
+      lines_color,
+      points_color,
+      step: attr.step,
+      offset: attr.offset,
+      angle: attr.angle,
+      bind: attr.bind,
+      line: new paper.Path({
+        parent: this,
+        strokeColor: new paper.Color(0, 0, 0.7),
+        strokeWidth: 2,
+        strokeScaling: false,
+      }),
+      point: new paper.Path.Circle({
+        parent: this,
+        guide: true,
+        radius: 22,
+        fillColor: points_color,
+      }),
+      lines: new paper.Group({
+        parent: this,
+        guide: true,
+        strokeColor: lines_color,
+        strokeScaling: false
+      }),
+    };
+
+  }
+
+  get path() {
+    return this._attr.path;
+  }
+  set path(v) {
+    this._attr.path = v;
+    this._attr.angle = 0;
+    this.set_bind();
+    this.set_line();
+  }
+
+  set_line() {
+    const {bind, offset, path, line, angle} = this._attr;
+    let {firstSegment: {point: b}, lastSegment: {point: e}} = path;
+    if(bind === 'e') {
+      [b, e] = [e, b];
+    }
+    if(line.segments.length) {
+      line.segments[0].point = b;
+      line.segments[1].point = e;
+    }
+    else {
+      line.addSegments([b, e]);
+    }
+
+    const langle = e.subtract(b).angle.round(2);
+    let dangle = Infinity;
+    if(angle) {
+      for(const a of [angle, angle - 180, angle + 180]) {
+        if(Math.abs(a - langle) < Math.abs(dangle)) {
+          dangle = a - langle;
+        }
+      }
+    }
+    else {
+      for(let a = -180; a <= 180; a += 45) {
+        if(Math.abs(a - langle) < Math.abs(dangle)) {
+          dangle = a - langle;
+        }
+      }
+    }
+    if(dangle) {
+      line.rotate(dangle);
+      line.elongation(1000);
+      line.firstSegment.point = line.getNearestPoint(b);
+      line.lastSegment.point = line.getNearestPoint(e);
+    }
+
+    const n0 = line.getNormalAt(0).multiply(offset);
+    line.firstSegment.point = line.firstSegment.point.subtract(n0);
+    line.lastSegment.point = line.lastSegment.point.subtract(n0);
+  }
+
+  set_bind() {
+    const {point, path, bind} = this._attr;
+    switch (bind) {
+    case 'b':
+      point.position = path.firstSegment.point;
+      break;
+    case 'e':
+      point.position = path.lastSegment.point;
+      break;
+    case 'product':
+      point.position = this.project.bounds.bottomLeft;
+      break;
+    case 'contour':
+      point.position = path.layer.bounds.bottomLeft;
+      break;
+    }
+  }
+
+  get bind() {
+    return this._attr.bind;
+  }
+  set bind(v) {
+    this._attr.bind = v;
+    this.set_bind();
+    this.set_line();
+  }
+
+  get step() {
+    return this._attr.step;
+  }
+  set step(v) {
+    this._attr.step = v;
+    this.set_line();
+  }
+
+  get angle() {
+    return this._attr.angle;
+  }
+  set angle(v) {
+    if(this._attr.angle !== v) {
+      this._attr.angle = v;
+      this.set_line();
+    }
+  }
+
+  get offset() {
+    return this._attr.offset;
+  }
+  set offset(v) {
+    this._attr.offset = v;
+    this.set_line();
+  }
+
+  grid_points() {
+    const {path, line, lines, lines_color, step, bind, point: {position}} = this._attr;
+    const res = [];
+    const n0 = line.getNormalAt(0).multiply(10000);
+    let do_break;
+    let prev;
+
+    function add(tpath, x, tpoint, point) {
+
+      if(position.getDistance(point) > 20) {
+        new paper.Path.Circle({
+          parent: lines,
+          guide: true,
+          radius: 22,
+          center: point,
+          fillColor: lines_color,
+        });
+      }
+
+      new paper.Path({
+        parent: lines,
+        guide: true,
+        strokeColor: lines_color,
+        strokeScaling: false,
+        segments: [tpoint, point],
+      })
+
+      const d1 = tpath.getOffsetOf(tpoint);
+      const d2 = tpath.getOffsetOf(point);
+      res.push({x: x.round(1), y: (d2 - d1).round(1)});
+    }
+
+    lines.removeChildren();
+
+    for (let x = 0; x < line.length + step; x += step) {
+      if(x >= line.length) {
+        if(do_break) {
+          break;
+        }
+        do_break = true;
+        x = line.length;
+      }
+      if(prev && (x - prev) < (step / 4)) {
+        break;
+      }
+      prev = x;
+      const tpoint = x < line.length ? line.getPointAt(x) : line.lastSegment.point;
+      const tpath = new paper.Path({
+        segments: [tpoint.subtract(n0), tpoint.add(n0)],
+        insert: false
+      });
+      const intersections = path.getIntersections(tpath);
+      if(intersections.length) {
+        add(tpath, x, tpoint, intersections[0].point);
+      }
+      else if(x === 0) {
+        add(tpath, x, tpoint, bind === 'e' ? path.lastSegment.point : path.firstSegment.point);
+      }
+      else if(x === line.length) {
+        add(tpath, x, tpoint, bind === 'e' ? path.firstSegment.point : path.lastSegment.point);
+      }
+    }
+
+    return res;
+  }
+
+
+}
+
+
 class Magnetism {
 
   constructor(scheme) {
@@ -4968,7 +5256,7 @@ Object.defineProperties(paper.Path.prototype, {
   is_linear: {
     value() {
       const {curves, firstCurve} = this;
-      if(curves.length == 1 && firstCurve.isLinear()) {
+      if(curves.length === 1 && firstCurve.isLinear()) {
         return true;
       }
       else if(this.hasHandles()) {
@@ -5122,7 +5410,7 @@ Object.defineProperties(paper.Path.prototype, {
         const intersections = this.getIntersections(path);
         let delta = Infinity, tdelta, tpoint;
 
-        if(intersections.length == 1){
+        if(intersections.length === 1){
           return intersections[0].point;
         }
         else if(intersections.length > 1){
@@ -5283,7 +5571,7 @@ Object.defineProperties(paper.Point.prototype, {
         return {x: xx1, y: yy1};
       }
       else {
-        return {x: xx2, y: yy2}
+        return {x: xx2, y: yy2};
       }
     }
   },
@@ -8539,7 +8827,7 @@ class Scheme extends paper.Project {
         }
         else if(!parent.nearest || !parent.nearest()) {
 
-          if(auto_align && parent.elm_type == $p.enm.elm_types.Импост) {
+          if(auto_align && parent.elm_type === $p.enm.elm_types.Импост && !parent.layer.layer && Math.abs(delta.x) > 1) {
             continue;
           }
 
@@ -8567,7 +8855,7 @@ class Scheme extends paper.Project {
       }
     }
 
-    other.length && this.do_align(auto_align, profiles);
+    other.length && Math.abs(delta.x) > 1 && this.do_align(auto_align, profiles);
 
     _dp._manager.emit_async('update', {}, {x1: true, x2: true, y1: true, y2: true, a1: true, a2: true, cnn1: true, cnn2: true, info: true});
 
@@ -9432,8 +9720,8 @@ class Sectional extends GeneratrixElement {
   }
 
   redraw() {
-    const {layer, generatrix, _attr} = this;
-    const {children, zoom, radius} = _attr;
+    const {layer, generatrix, _attr, radius} = this;
+    const {children, zoom} = _attr;
     const {segments, curves} = generatrix;
 
     for(let child of children){
@@ -9461,8 +9749,8 @@ class Sectional extends GeneratrixElement {
   }
 
   draw_angle(ind) {
-    const {layer, generatrix, _attr} = this;
-    const {children, zoom, radius} = _attr;
+    const {layer, generatrix, _attr, radius} = this;
+    let {children, zoom} = _attr;
     const {curves} = generatrix;
     const c1 = curves[ind - 1];
     const c2 = curves[ind];
@@ -9476,6 +9764,8 @@ class Sectional extends GeneratrixElement {
     if(angle > 180){
       angle = 360 - angle;
     }
+
+
 
     if (c1.length < radius || c2.length < radius || 180 - angle < 1){
       return;
@@ -9541,6 +9831,16 @@ class Sectional extends GeneratrixElement {
 
   get elm_type() {
     return $p.enm.elm_types.Водоотлив;
+  }
+
+  get radius() {
+    let {generatrix, radius} = this._attr;
+    const {height, width} = generatrix.bounds;
+    const size = Math.max(width - consts.cutoff, height - consts.cutoff);
+    if(size > 0) {
+      radius += size / 60;
+    }
+    return radius;
   }
 }
 
@@ -10378,7 +10678,7 @@ class ProductsBuilding {
       const {new_spec_row} = ProductsBuilding;
       const {side_count, furn, direction} = contour;
 
-      if(furn.side_count && side_count !== furn.side_count) {
+      if(furn.open_type !== $p.enm.open_types.Глухое && furn.side_count && side_count !== furn.side_count) {
         const row_base = {clr: $p.cat.clrs.get(), nom: $p.job_prm.nom.furn_error};
         contour.profiles.forEach(elm => {
           new_spec_row({elm, row_base, origin: furn, spec, ox});
@@ -10438,8 +10738,8 @@ class ProductsBuilding {
 
       const prev = b.profile;
       const next = e.profile;
-      const row_cnn_prev = b.cnn.main_row(elm);
-      const row_cnn_next = e.cnn.main_row(elm);
+      const row_cnn_prev = b.cnn && b.cnn.main_row(elm);
+      const row_cnn_next = e.cnn && e.cnn.main_row(elm);
       const {new_spec_row, calc_count_area_mass} = ProductsBuilding;
 
       let row_spec;
@@ -11619,7 +11919,7 @@ $p.CatCharacteristics = class CatCharacteristics extends $p.CatCharacteristics {
       editor = new $p.EditorInvisible();
     }
     const project = editor.create_scheme();
-    return project.load(this, true)
+    return project.load(this, attr.builder_props || true)
       .then(() => {
         const {_obj: {glasses, constructions, coordinates}} = this;
         if(attr.elm) {
@@ -11655,15 +11955,17 @@ $p.CatCharacteristics = class CatCharacteristics extends $p.CatCharacteristics {
           else {
             res[ref].imgs[`l0`] = project.get_svg(attr);
           }
-          constructions.forEach(({cnstr}) => {
-            project.draw_fragment({elm: -cnstr});
-            if(attr.format === 'png') {
-              res[ref].imgs[`l${cnstr}`] = project.view.element.toDataURL('image/png').substr(22);
-            }
-            else {
-              res[ref].imgs[`l${cnstr}`] = project.get_svg(attr);
-            }
-          });
+          if(attr.glasses !== false) {
+            constructions.forEach(({cnstr}) => {
+              project.draw_fragment({elm: -cnstr});
+              if(attr.format === 'png') {
+                res[ref].imgs[`l${cnstr}`] = project.view.element.toDataURL('image/png').substr(22);
+              }
+              else {
+                res[ref].imgs[`l${cnstr}`] = project.get_svg(attr);
+              }
+            });
+          }
         }
       })
       .then(() => {
@@ -12547,7 +12849,7 @@ $p.CatFurns = class CatFurns extends $p.CatFurns {
 
   get_spec(contour, cache, exclude_dop) {
 
-    const res = $p.dp.buyers_order.create().specification;
+    const res = $p.dp.buyers_order.create({specification: []}, true).specification;
     const {ox} = contour.project;
     const {НаПримыкающий} = $p.enm.transfer_operations_options;
 
@@ -12715,16 +13017,28 @@ $p.CatFurnsSpecificationRow = class CatFurnsSpecificationRow extends $p.CatFurns
     if(res) {
 
       specification_restrictions.find_rows({elm, dop}, (row) => {
-        let len;
-        if (contour.is_rectangular) {
-          len = (row.side == 1 || row.side == 3) ? cache.w : cache.h;
+        const {lmin, lmax, amin, amax, side, for_direct_profile_only} = row;
+        const elm = contour.profile_by_furn_side(side, cache);
+
+        if(for_direct_profile_only === -1 && elm.is_linear()) {
+          return res = false;
         }
-        else {
-          const elm = contour.profile_by_furn_side(row.side, cache);
-          len = elm ? (elm._row.len - 2 * elm.nom.sizefurn) : 0;
+        if(for_direct_profile_only === 1 && !elm.is_linear()) {
+          return res = false;
         }
-        len = len.round();
-        if (len < row.lmin || len > row.lmax) {
+
+        const { side_count } = contour;
+        const prev = contour.profile_by_furn_side(row.side === 1 ? side_count : row.side - 1, cache);
+        const next = contour.profile_by_furn_side(row.side === side_count ? 1 : row.side + 1, cache);
+        const len = (elm._row.len - prev.nom.sizefurn - next.nom.sizefurn).round();
+        if (len < lmin || len > lmax) {
+          return res = false;
+        }
+
+        const angle = direction == $p.enm.open_directions.Правое ?
+          elm.generatrix.angle_to(prev.generatrix, elm.e) :
+          prev.generatrix.angle_to(elm.generatrix, elm.b);
+        if (angle < amin || angle > amax) {
           return res = false;
         }
       });
@@ -14180,7 +14494,7 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
     const {individual_person} = manager;
     const our_bank_account = bank_account && !bank_account.empty() ? bank_account : organization.main_bank_account;
     const get_imgs = [];
-    const {cat: {contact_information_kinds, characteristics}, utils: {blank, blob_as_text}} = $p;
+    const {cat: {contact_information_kinds, characteristics}, utils: {blank, blob_as_text, snake_ref}} = $p;
 
     const res = {
       АдресДоставки: this.shipping_address,
@@ -14316,6 +14630,8 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
 
     return this.load_production().then(() => {
 
+      let editor, imgs = Promise.resolve();
+      const builder_props = attr.builder_props && Object.assign({}, $p.CatCharacteristics.builder_props_defaults, attr.builder_props);
       this.production.forEach((row) => {
         if(!row.characteristic.empty() && !row.nom.is_procedure && !row.nom.is_service && !row.nom.is_accessory) {
 
@@ -14324,8 +14640,16 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
           res.ВсегоИзделий += row.quantity;
           res.ВсегоПлощадьИзделий += row.quantity * row.s;
 
-          if(attr.sizes === false) {
-
+          if(builder_props) {
+            if(!editor) {
+              editor = new $p.EditorInvisible();
+            }
+            imgs = imgs.then(() => {
+              return row.characteristic.draw(attr, editor)
+                .then((img) => {
+                  res.ПродукцияЭскизы[row.characteristic.ref] = img[snake_ref(row.characteristic.ref)].imgs.l0;
+                });
+            });
           }
           else {
             if(row.characteristic.svg) {
@@ -14342,25 +14666,28 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
       });
       res.ВсегоПлощадьИзделий = res.ВсегоПлощадьИзделий.round(3);
 
-      return (get_imgs.length ? Promise.all(get_imgs) : Promise.resolve([]))
-        .then(() => !window.QRCode && $p.load_script('/dist/qrcodejs/qrcode.min.js', 'script'))
-        .then(() => {
+      return imgs.then(() => {
+        editor && editor.unload();
+        return (get_imgs.length ? Promise.all(get_imgs) : Promise.resolve([]))
+          .then(() => typeof QRCode === 'undefined' && $p.load_script('/dist/qrcodejs/qrcode.min.js', 'script'))
+          .then(() => {
 
-          const svg = document.createElement('SVG');
-          svg.innerHTML = '<g />';
-          const qrcode = new QRCode(svg, {
-            text: 'http://www.oknosoft.ru/zd/',
-            width: 100,
-            height: 100,
-            colorDark: '#000000',
-            colorLight: '#ffffff',
-            correctLevel: QRCode.CorrectLevel.H,
-            useSVG: true
+            const svg = document.createElement('SVG');
+            svg.innerHTML = '<g />';
+            const qrcode = new QRCode(svg, {
+              text: 'http://www.oknosoft.ru/zd/',
+              width: 100,
+              height: 100,
+              colorDark: '#000000',
+              colorLight: '#ffffff',
+              correctLevel: QRCode.CorrectLevel.H,
+              useSVG: true
+            });
+            res.qrcode = svg.innerHTML;
+
+            return res;
           });
-          res.qrcode = svg.innerHTML;
-
-          return res;
-        });
+      });
 
     });
 
@@ -14387,6 +14714,8 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
       Ширина: row.width,
       ВсегоПлощадь: row.s * row.quantity,
       Примечание: row.note,
+      Комментарий: row.note,
+      СистемаПрофилей: characteristic.sys.presentation,
       Номенклатура: nom.name_full || nom.name,
       Характеристика: characteristic.name,
       Заполнения: '',

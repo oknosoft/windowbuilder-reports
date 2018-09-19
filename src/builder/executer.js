@@ -219,7 +219,7 @@ export default async (ctx, next) => {
   //   return;
   // }
 
-  console.log(ctx.params);
+  //console.log(ctx.params);
 
   try{
     switch (ctx.params.class){
@@ -236,7 +236,7 @@ export default async (ctx, next) => {
   catch(err){
     ctx.status = 500;
     ctx.body = err.stack;
-    console.log(err);
+    console.error(err);
   }
 
 };
