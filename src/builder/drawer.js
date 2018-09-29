@@ -3242,14 +3242,16 @@ class BuilderElement extends paper.Group {
   set generatrix(attr) {
 
     const {_attr} = this;
-    _attr.generatrix.removeSegments();
+    const {generatrix} = _attr;
+    generatrix.removeSegments();
 
-    if(this.hasOwnProperty('rays')){
-      this.rays.clear();
+    this.rays && this.rays.clear();
+
+    if(attr instanceof paper.Path){
+      generatrix.addSegments(attr.segments);
     }
-
     if(Array.isArray(attr)){
-      _attr.generatrix.addSegments(attr);
+      generatrix.addSegments(attr);
     }
     else if(attr.proto &&  attr.p1 &&  attr.p2){
 
@@ -3273,7 +3275,7 @@ class BuilderElement extends paper.Group {
         tpath.split(d2);
       }
 
-      _attr.generatrix.remove();
+      generatrix.remove();
       _attr.generatrix = tpath;
       _attr.generatrix.parent = this;
 
@@ -4413,6 +4415,12 @@ class FreeText extends paper.PointText {
 
     if(!attr.fontSize){
       attr.fontSize = consts.font_size;
+      if(attr.parent) {
+        const {width, height} = attr.parent.project.bounds;
+        const {cutoff, font_size} = consts;
+        const size = Math.max(width - cutoff, height - cutoff) / 60;
+        attr.fontSize += (size > 0 ? size : 0).round();
+      }
     }
     attr.fontFamily = consts.font_family;
 
@@ -4811,11 +4819,13 @@ class GridCoordinates extends paper.Group {
     this.parent = this.project.l_dimensions;
 
     const points_color = new paper.Color(0, 0.7, 0, 0.8);
+    const sel_color = new paper.Color(0.1, 0.4, 0, 0.9);
     const lines_color = new paper.Color(0, 0, 0.7, 0.8);
 
     this._attr = {
       lines_color,
       points_color,
+      sel_color,
       step: attr.step,
       offset: attr.offset,
       angle: attr.angle,
@@ -4947,8 +4957,8 @@ class GridCoordinates extends paper.Group {
     this.set_line();
   }
 
-  grid_points() {
-    const {path, line, lines, lines_color, step, bind, point: {position}} = this._attr;
+  grid_points(sel_x) {
+    const {path, line, lines, lines_color, sel_color, step, bind, point: {position}} = this._attr;
     const res = [];
     const n0 = line.getNormalAt(0).multiply(10000);
     let do_break;
@@ -4956,8 +4966,10 @@ class GridCoordinates extends paper.Group {
 
     function add(tpath, x, tpoint, point) {
 
+      let pt;
+
       if(position.getDistance(point) > 20) {
-        new paper.Path.Circle({
+        pt = new paper.Path.Circle({
           parent: lines,
           guide: true,
           radius: 22,
@@ -4966,7 +4978,7 @@ class GridCoordinates extends paper.Group {
         });
       }
 
-      new paper.Path({
+      const pth = new paper.Path({
         parent: lines,
         guide: true,
         strokeColor: lines_color,
@@ -4977,6 +4989,13 @@ class GridCoordinates extends paper.Group {
       const d1 = tpath.getOffsetOf(tpoint);
       const d2 = tpath.getOffsetOf(point);
       res.push({x: x.round(1), y: (d2 - d1).round(1)});
+
+      if(Math.abs(x - sel_x) < 10) {
+        if(pt) {
+          pt.fillColor = sel_color;
+        }
+        pth.strokeColor = sel_color;
+      }
     }
 
     lines.removeChildren();
@@ -5002,17 +5021,16 @@ class GridCoordinates extends paper.Group {
       if(intersections.length) {
         add(tpath, x, tpoint, intersections[0].point);
       }
-      else if(x === 0) {
+      else if(x < step / 2) {
         add(tpath, x, tpoint, bind === 'e' ? path.lastSegment.point : path.firstSegment.point);
       }
-      else if(x === line.length) {
+      else if(x > line.length - step / 2) {
         add(tpath, x, tpoint, bind === 'e' ? path.firstSegment.point : path.lastSegment.point);
       }
     }
 
     return res;
   }
-
 
 }
 
@@ -5188,8 +5206,11 @@ Object.defineProperties(paper.Path.prototype, {
 
   getDirectedAngle: {
     value(point) {
-      const np = this.getNearestPoint(point),
-        offset = this.getOffsetOf(np);
+      if(!point) {
+        point = this.interiorPoint;
+      }
+      const np = this.getNearestPoint(point);
+      const offset = this.getOffsetOf(np);
       return this.getTangentAt(offset).getDirectedAngle(point.add(np.negate()));
     }
   },
@@ -9870,7 +9891,7 @@ class Pricing {
         return !loc && this.by_range();
       })
       .then(() => {
-        const {pouch} = $p.adapters;
+        const {adapters: {pouch}, doc: {calc_order}, wsql} = $p;
         pouch.emit('pouch_complete_loaded');
 
         if(pouch.local.doc === pouch.remote.doc) {
@@ -9878,14 +9899,17 @@ class Pricing {
             since: 'now',
             live: true,
             include_docs: true,
-            selector: pouch.props.user_node ? {class_name: 'doc.nom_prices_setup'} : {class_name: {$in: ['doc.nom_prices_setup', 'doc.calc_order']}}
+            selector: {class_name: {$in: ['doc.nom_prices_setup', calc_order.class_name]}}
           }).on('change', (change) => {
             if(change.doc.class_name == 'doc.nom_prices_setup'){
               setTimeout(() => this.by_doc(change.doc), 500);
             }
-            else if(change.doc.class_name == 'doc.calc_order'){
-              const doc = $p.doc.calc_order.by_ref[change.id.substr(15)];
-              const user = pouch.authorized || $p.wsql.get_user_param('user_name');
+            else if(change.doc.class_name == calc_order.class_name){
+              if(pouch.props.user_node) {
+               return calc_order.emit('change', change.doc);
+              }
+              const doc = calc_order.by_ref[change.id.substr(15)];
+              const user = pouch.authorized || wsql.get_user_param('user_name');
               if(!doc || user === change.doc.timestamp.user){
                 return;
               }
@@ -11499,9 +11523,22 @@ $p.spec_building = new SpecBuilding($p);
 
 
 
-(function($p){
+(function({enm}){
 
-	$p.enm.open_types.__define({
+  enm.debit_credit_kinds.__define({
+    debit: {
+      get() {
+        return this.Приход;
+      }
+    },
+    credit: {
+      get() {
+        return this.Расход;
+      }
+    },
+  });
+
+	enm.open_types.__define({
 
     is_opening: {
       value(v) {
@@ -11514,7 +11551,7 @@ $p.spec_building = new SpecBuilding($p);
 
   });
 
-	$p.enm.orientations.__define({
+	enm.orientations.__define({
 
 		hor: {
 			get() {
@@ -11535,7 +11572,7 @@ $p.spec_building = new SpecBuilding($p);
 		}
 	});
 
-	$p.enm.positions.__define({
+	enm.positions.__define({
 
 		left: {
 			get() {
@@ -12283,7 +12320,9 @@ $p.cat.clrs.__define({
 					return wnd;
 
 				})
-		}
+    },
+    configurable: true,
+    writable: true,
 	},
 
 	sync_grid: {
@@ -13502,7 +13541,7 @@ $p.CatInserts = class CatInserts extends $p.CatInserts {
 
       if(glass_rows.length){
         glass_rows.forEach((row) => {
-          row.inset.filtered_spec({elm, len_angl, ox}).forEach((row) => {
+          row.inset.filtered_spec({elm, len_angl, ox, own_row: {clr: row.clr}}).forEach((row) => {
             res.push(row);
           });
         });
@@ -14383,14 +14422,14 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
   }
 
   value_change(field, type, value) {
-    if(field == 'organization') {
+    if(field === 'organization') {
       this.organization = value;
       if(this.contract.organization != value) {
         this.contract = $p.cat.contracts.by_partner_and_org(this.partner, value);
         this.new_number_doc();
       }
     }
-    else if(field == 'partner' && this.contract.owner != value) {
+    else if(field === 'partner' && this.contract.owner != value) {
       this.contract = $p.cat.contracts.by_partner_and_org(value, this.organization);
     }
     this._manager.emit_add_fields(this, ['contract']);

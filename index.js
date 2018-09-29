@@ -1,5 +1,5 @@
 /*!
- windowbuilder-reports v2.0.242, built:2018-09-19
+ windowbuilder-reports v2.0.242, built:2018-09-29
  © 2014-2018 Evgeniy Malyarov and the Oknosoft team http://www.oknosoft.ru
  To obtain commercial license and technical support, contact info@oknosoft.ru
  */
@@ -268,15 +268,97 @@ class Editor extends EditorInvisible {
 }
 $p$1.Editor = Editor;
 
-const debug$2 = require('debug')('wb:router');
-debug$2('start');
+const debug$2 = require('debug')('wb:indexer');
+const {adapters: {pouch}, doc: {calc_order}} = $p$1;
+const fields = [
+  '_id',
+  'state',
+  'posted',
+  'date',
+  'number_doc',
+  'number_internal',
+  'partner',
+  'client_of_dealer',
+  'doc_amount',
+  'obj_delivery_state',
+  'department',
+  'note'];
+const indexer = {
+  by_date: new Map(),
+  _count: 0,
+  put(indoc) {
+    const doc = {};
+    fields.forEach((fld) => doc[fld] = indoc[fld]);
+    const date = parseInt(doc.date.substr(0,7).replace('-', ''), 10);
+    if(indexer.by_date.has(date)) {
+      const arr = indexer.by_date.get(date);
+      if(!arr.some((row) => {
+        if(row._id === doc._id) {
+          Object.assign(row, doc);
+          return true;
+        }
+      })){
+        arr.push(doc);
+      }
+    }
+    else {
+      indexer.by_date.set(date, [doc]);
+    }
+  },
+  find(selector) {
+    return [];
+  },
+  init(bookmark) {
+    if(!bookmark) {
+      calc_order.on('change', indexer.put);
+      debug$2('start');
+    }
+    pouch.remote.doc.find({
+      selector: {
+        class_name: calc_order.class_name,
+      },
+      fields,
+      bookmark,
+      limit: 10000,
+    })
+      .then(({bookmark, docs}) => {
+        indexer._count += docs.length;
+        for(const doc of docs) {
+          doc.state !== 'template' && indexer.put(doc);
+        }
+        debug$2(`indexed ${indexer._count} ${bookmark.substr(0, 30)}`);
+        docs.length === 10000 && indexer.init(bookmark);
+      });
+  },
+};
+pouch.on('pouch_complete_loaded', indexer.init);
+
+var calc_order$1 = async (ctx, next) => {
+  indexer.some(0, 1000, (row) => {
+  });
+};
+
+var search = async (ctx, next) => {
+  try{
+    return await calc_order$1(ctx, next);
+  }
+  catch(err){
+    ctx.status = 500;
+    ctx.body = err.stack;
+    console.error(err);
+  }
+};
+
+const debug$3 = require('debug')('wb:router');
+debug$3('start');
 const rep = Router({ prefix: '/r' });
 rep.loadMethods()
   .get('/', async (ctx, next) => {
     await next();
     ctx.body = `Reports: try out <a href="/r/img">/r/img</a> too`;
   })
-  .get('/img/:class/:ref', executer);
+  .get('/img/:class/:ref', executer)
+  .post('/_find', search);
 
 const app = new Koa();
 app.use(cors({credentials: true, maxAge: 600}));
