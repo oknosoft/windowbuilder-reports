@@ -1,5 +1,5 @@
 /*!
- windowbuilder-reports v2.0.242, built:2018-09-29
+ windowbuilder-reports v2.0.242, built:2018-09-30
  © 2014-2018 Evgeniy Malyarov and the Oknosoft team http://www.oknosoft.ru
  To obtain commercial license and technical support, contact info@oknosoft.ru
  */
@@ -12,6 +12,7 @@ function _interopDefault (ex) { return (ex && (typeof ex === 'object') && 'defau
 var metaCore = _interopDefault(require('metadata-core'));
 var metaPouchdb = _interopDefault(require('metadata-pouchdb'));
 var paper = _interopDefault(require('paper/dist/paper-core'));
+var request = _interopDefault(require('request'));
 var Router = _interopDefault(require('koa-better-router'));
 var Koa = _interopDefault(require('koa'));
 var cors = _interopDefault(require('@koa/cors'));
@@ -268,6 +269,60 @@ class Editor extends EditorInvisible {
 }
 $p$1.Editor = Editor;
 
+const auth_cache = {};
+const couch_public = `${process.env.COUCHPUBLIC}${process.env.ZONE}_doc`;
+var auth = async (ctx, {cat}) => {
+  let {authorization, suffix} = ctx.req.headers;
+  if(!authorization || !suffix){
+    ctx.status = 403;
+    ctx.body = 'access denied';
+    return;
+  }
+  const _auth = {'username': ''};
+  const resp = await new Promise((resolve, reject) => {
+    function set_cache(key, auth) {
+      auth_cache[key] = Object.assign({}, _auth, {stamp: Date.now(), auth});
+      resolve(auth);
+    }
+    const auth_str = authorization.substr(6);
+    try{
+      const cached = auth_cache[auth_str];
+      if(cached && (cached.stamp + 30 * 60 * 1000) > Date.now()) {
+        Object.assign(_auth, cached);
+        return resolve(cached.auth);
+      }
+      const auth = new Buffer(auth_str, 'base64').toString();
+      const sep = auth.indexOf(':');
+      _auth.pass = auth.substr(sep + 1);
+      _auth.username = auth.substr(0, sep);
+      while (suffix.length < 4){
+        suffix = '0' + suffix;
+      }
+      _auth.suffix = suffix;
+      request({
+        url: couch_public + (suffix === '0000' ? '' : `_${suffix}`),
+        auth: {'user':_auth.username, 'pass':_auth.pass, sendImmediately: true}
+      }, (e, r, body) => {
+        if(r && r.statusCode < 201){
+          set_cache(auth_str, true);
+        }
+        else{
+          ctx.status = (r && r.statusCode) || 500;
+          ctx.body = body || (e && e.message);
+          set_cache(auth_str, false);
+        }
+      });
+    }
+    catch(e){
+      ctx.status = 500;
+      ctx.body = e.message;
+      delete auth_cache[auth_str];
+      resolve(false);
+    }
+  });
+  return ctx._auth = resp && Object.assign(_auth, {user: cat.users.by_id(_auth.username)});
+};
+
 const debug$2 = require('debug')('wb:indexer');
 const {adapters: {pouch}, doc: {calc_order}} = $p$1;
 const fields = [
@@ -283,15 +338,20 @@ const fields = [
   'obj_delivery_state',
   'department',
   'note'];
+const search_fields = ['number_doc', 'client_of_dealer', 'note'];
 const indexer = {
-  by_date: new Map(),
+  by_date: {},
   _count: 0,
   put(indoc) {
     const doc = {};
-    fields.forEach((fld) => doc[fld] = indoc[fld]);
-    const date = parseInt(doc.date.substr(0,7).replace('-', ''), 10);
-    if(indexer.by_date.has(date)) {
-      const arr = indexer.by_date.get(date);
+    fields.forEach((fld) => {
+      if(indoc.hasOwnProperty(fld)) {
+        doc[fld] = indoc[fld];
+      }
+    });
+    const date = doc.date.substr(0,7);
+    const arr = indexer.by_date[date];
+    if(arr) {
       if(!arr.some((row) => {
         if(row._id === doc._id) {
           Object.assign(row, doc);
@@ -302,11 +362,82 @@ const indexer = {
       }
     }
     else {
-      indexer.by_date.set(date, [doc]);
+      indexer.by_date[date] = [doc];
     }
   },
-  find(selector) {
-    return [];
+  get(from, till, step) {
+    if(step) {
+      let [year, month] = from.split('-');
+      month = parseInt(month, 10) + step;
+      while (month > 12) {
+        year = parseInt(year, 10) + 1;
+        month -= 12;
+      }
+      from = `${year}-${month.pad(2)}`;
+    }
+    if(from > till) {
+      return null;
+    }
+    let res = indexer.by_date[from];
+    if(!res) {
+      res = [];
+    }
+    return res;
+  },
+  find({selector, limit, skip = 0}) {
+    let dfrom, dtill, from, till, search;
+    for(const row of selector.$and) {
+      const fld = Object.keys(row)[0];
+      const cond = Object.keys(row[fld])[0];
+      if(fld === 'date') {
+        if(cond === '$lt' || cond === '$lte') {
+          dtill = row[fld][cond];
+          till = dtill.substr(0,7);
+        }
+        else if(cond === '$gt' || cond === '$gte') {
+          dfrom = row[fld][cond];
+          from = dfrom.substr(0,7);
+        }
+      }
+      else if(fld === 'search') {
+        search = row[fld][cond].toLowerCase().split(' ');
+      }
+    }
+    let part, step = 0;
+    const res = [];
+    function add(doc) {
+      if(skip > 0) {
+        skip--;
+        return true;
+      }
+      if(limit > 0) {
+        limit--;
+        res.push(doc);
+        return true;
+      }
+    }
+    while(part = indexer.get(from, till, step)) {
+      step += 1;
+      for(const doc of part) {
+        if(doc.date < dfrom || doc.date > dtill) {
+          continue;
+        }
+        let ok = true;
+        for(const word of search) {
+          if(!word) {
+            continue;
+          }
+          if(!search_fields.some((fld) => doc[fld] && doc[fld].toLowerCase().includes(word))){
+            ok = false;
+            break;
+          }
+        }
+        if(ok && !add(doc)) {
+          return res;
+        }
+      }
+    }
+    return res;
   },
   init(bookmark) {
     if(!bookmark) {
@@ -333,19 +464,36 @@ const indexer = {
 };
 pouch.on('pouch_complete_loaded', indexer.init);
 
-var calc_order$1 = async (ctx, next) => {
-  indexer.some(0, 1000, (row) => {
+function json(ctx) {
+  return new Promise((resolve, reject) => {
+    let rawData = '';
+    ctx.req.on('data', (chunk) => { rawData += chunk; });
+    ctx.req.on('end', () => {
+      try {
+        resolve(ctx._json = JSON.parse(rawData));
+      }
+      catch (e) {
+        ctx.status = 500;
+        ctx.body = e.message;
+        reject(e);
+      }
+    });
   });
-};
-
+}
 var search = async (ctx, next) => {
-  try{
-    return await calc_order$1(ctx, next);
-  }
-  catch(err){
-    ctx.status = 500;
-    ctx.body = err.stack;
-    console.error(err);
+  await auth(ctx, $p)
+    .then(() => json(ctx))
+    .catch(() => null);
+  if(ctx._auth && ctx._json) {
+    try{
+      ctx.body = {docs : indexer.find(ctx._json)};
+      ctx.status = 200;
+    }
+    catch(err){
+      ctx.status = 500;
+      ctx.body = err.stack;
+      console.error(err);
+    }
   }
 };
 

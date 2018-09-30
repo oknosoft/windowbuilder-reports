@@ -24,20 +24,25 @@ const fields = [
   'obj_delivery_state',
   'department',
   'note'];
+const search_fields = ['number_doc', 'client_of_dealer', 'note'];
 
 const indexer = {
 
-  by_date: new Map(),
+  by_date: {},
 
   _count: 0,
 
   // помещает документ в кеш
   put(indoc) {
     const doc = {};
-    fields.forEach((fld) => doc[fld] = indoc[fld]);
-    const date = parseInt(doc.date.substr(0,7).replace('-', ''), 10);
-    if(indexer.by_date.has(date)) {
-      const arr = indexer.by_date.get(date);
+    fields.forEach((fld) => {
+      if(indoc.hasOwnProperty(fld)) {
+        doc[fld] = indoc[fld];
+      }
+    });
+    const date = doc.date.substr(0,7);
+    const arr = indexer.by_date[date]
+    if(arr) {
       if(!arr.some((row) => {
         if(row._id === doc._id) {
           Object.assign(row, doc);
@@ -48,13 +53,95 @@ const indexer = {
       }
     }
     else {
-      indexer.by_date.set(date, [doc]);
+      indexer.by_date[date] = [doc];
     }
   },
 
+  get(from, till, step) {
+    if(step) {
+      let [year, month] = from.split('-');
+      month = parseInt(month, 10) + step;
+      while (month > 12) {
+        year = parseInt(year, 10) + 1;
+        month -= 12;
+      }
+      from = `${year}-${month.pad(2)}`;
+    }
+    if(from > till) {
+      return null;
+    }
+    let res = indexer.by_date[from];
+    if(!res) {
+      res = [];
+    }
+    return res;
+  },
+
   // перебирает кеш в диапазоне дат
-  find(selector) {
-    return [];
+  find({selector, limit, skip = 0}) {
+    let dfrom, dtill, from, till, search;
+    for(const row of selector.$and) {
+      const fld = Object.keys(row)[0];
+      const cond = Object.keys(row[fld])[0];
+      if(fld === 'date') {
+        if(cond === '$lt' || cond === '$lte') {
+          dtill = row[fld][cond];
+          till = dtill.substr(0,7);
+        }
+        else if(cond === '$gt' || cond === '$gte') {
+          dfrom = row[fld][cond];
+          from = dfrom.substr(0,7);
+        }
+      }
+      else if(fld === 'search') {
+        search = row[fld][cond].toLowerCase().split(' ');
+      }
+    }
+
+    let part, step = 0;
+    const res = [];
+    function add(doc) {
+      if(skip > 0) {
+        skip--;
+        return true;
+      }
+      if(limit > 0) {
+        limit--;
+        res.push(doc);
+        return true;
+      }
+    }
+
+    // получаем очередной кусочек кеша
+    while(part = indexer.get(from, till, step)) {
+      step += 1;
+      // фильтруем
+      for(const doc of part) {
+
+        // фильтруем по дате
+        if(doc.date < dfrom || doc.date > dtill) {
+          continue;
+        }
+
+        // фильтруем по строке
+        let ok = true;
+        for(const word of search) {
+          if(!word) {
+            continue;
+          }
+          if(!search_fields.some((fld) => doc[fld] && doc[fld].toLowerCase().includes(word))){
+            ok = false;
+            break;
+          }
+        }
+
+        if(ok && !add(doc)) {
+          return res;
+        }
+      }
+    }
+
+    return res;
   },
 
   // формирует начальный дамп

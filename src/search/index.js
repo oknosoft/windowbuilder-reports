@@ -6,35 +6,43 @@
  * Created by Evgeniy Malyarov on 29.09.2018.
  */
 
-import calc_order from './calc_order';
+import auth from '../auth';
+import indexer from './indexer';
+
+function json(ctx) {
+  return new Promise((resolve, reject) => {
+    let rawData = '';
+    ctx.req.on('data', (chunk) => { rawData += chunk; });
+    ctx.req.on('end', () => {
+      try {
+        resolve(ctx._json = JSON.parse(rawData));
+      }
+      catch (e) {
+        ctx.status = 500;
+        ctx.body = e.message;
+        reject(e);
+      }
+    });
+  });
+}
 
 export default async (ctx, next) => {
 
-  // если указано ограничение по ip - проверяем
-  // const {restrict_ips} = ctx.app;
-  // const ip = ctx.req.headers['x-real-ip'] || ctx.ip;
-  // if(restrict_ips.length && restrict_ips.indexOf(ip) == -1){
-  //   ctx.status = 403;
-  //   ctx.body = 'ip restricted: ' + ip;
-  //   return;
-  // }
+  // проверяем ограничение по ip и авторизацию
+  await auth(ctx, $p)
+    .then(() => json(ctx))
+    .catch(() => null);
 
-  // проверяем авторизацию
-  // let {authorization, suffix} = ctx.req.headers;
-  // if(!authorization || !suffix){
-  //   ctx.status = 403;
-  //   ctx.body = 'access denied';
-  //   return;
-  // }
-
-  //console.log(ctx.params);
-
-  try{
-    return await calc_order(ctx, next);
+  if(ctx._auth && ctx._json) {
+    try{
+      ctx.body = {docs : indexer.find(ctx._json)};
+      ctx.status = 200;
+    }
+    catch(err){
+      ctx.status = 500;
+      ctx.body = err.stack;
+      console.error(err);
+    }
   }
-  catch(err){
-    ctx.status = 500;
-    ctx.body = err.stack;
-    console.error(err);
-  }
+
 }
