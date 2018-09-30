@@ -342,7 +342,8 @@ const search_fields = ['number_doc', 'number_internal', 'client_of_dealer', 'not
 const indexer = {
   by_date: {},
   _count: 0,
-  put(indoc) {
+  _ready: false,
+  put(indoc, force) {
     const doc = {};
     fields.forEach((fld) => {
       if(indoc.hasOwnProperty(fld)) {
@@ -352,7 +353,7 @@ const indexer = {
     const date = doc.date.substr(0,7);
     const arr = indexer.by_date[date];
     if(arr) {
-      if(!arr.some((row) => {
+      if(force || !arr.some((row) => {
         if(row._id === doc._id) {
           Object.assign(row, doc);
           return true;
@@ -457,11 +458,18 @@ const indexer = {
     })
       .then(({bookmark, docs}) => {
         indexer._count += docs.length;
+        debug$2(`received ${indexer._count}`);
         for(const doc of docs) {
-          doc.state !== 'template' && indexer.put(doc);
+          indexer.put(doc, true);
         }
-        debug$2(`indexed ${indexer._count} ${bookmark.substr(0, 30)}`);
-        docs.length === 10000 && indexer.init(bookmark);
+        debug$2(`indexed ${indexer._count} ${bookmark.substr(10, 30)}`);
+        if(docs.length < 10000) {
+          indexer._ready = true;
+          debug$2('ready');
+        }
+        else {
+          indexer.init(bookmark);
+        }
       });
   },
 };
