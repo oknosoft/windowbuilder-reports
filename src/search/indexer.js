@@ -24,7 +24,7 @@ const fields = [
   'obj_delivery_state',
   'department',
   'note'];
-const search_fields = ['number_doc', 'client_of_dealer', 'note'];
+const search_fields = ['number_doc', 'number_internal', 'client_of_dealer', 'note'];
 
 const indexer = {
 
@@ -94,7 +94,7 @@ const indexer = {
         }
       }
       else if(fld === 'search') {
-        search = row[fld][cond].toLowerCase().split(' ');
+        search = row[fld][cond] ? row[fld][cond].toLowerCase().split(' ') : [];
       }
     }
 
@@ -129,7 +129,10 @@ const indexer = {
           if(!word) {
             continue;
           }
-          if(!search_fields.some((fld) => doc[fld] && doc[fld].toLowerCase().includes(word))){
+          if(!search_fields.some((fld) => {
+            const val = doc[fld];
+            return val && typeof val === 'string' && val.toLowerCase().includes(word);
+          })){
             ok = false;
             break;
           }
