@@ -10,7 +10,7 @@ const debug = require('debug')('wb:indexer');
 
 import $p from '../metadata';
 
-const {adapters: {pouch}, doc: {calc_order}} = $p;
+const {adapters: {pouch}, doc: {calc_order}, utils} = $p;
 const fields = [
   '_id',
   'state',
@@ -126,7 +126,7 @@ const indexer = {
   },
 
   // перебирает кеш в диапазоне дат
-  find({selector, sort, limit, skip = 0}, {branch}) {
+  find({selector, sort, ref, limit, skip = 0}, {branch}) {
 
     // извлекаем значения полей фильтра из селектора
     let dfrom, dtill, from, till, search, department, state;
@@ -164,10 +164,23 @@ const indexer = {
     const partners = branch.partners._obj.map(({acl_obj}) => acl_obj);
     const divisions = branch.divisions._obj.map(({acl_obj}) => acl_obj);
 
-    let part, step = 0;
+    let part,
+      // выборка диапазона кеша
+      step = 0,
+      // флаг поиска страницы со ссылкой
+      flag = utils.is_guid(ref);
+
     const res = [];
 
     function add(doc) {
+      if(flag) {
+        res.push(doc);
+        if(doc._id.endsWith(ref)) {
+          flag = false;
+          const len = res.length;
+        }
+        return true;
+      }
       if(skip > 0) {
         skip--;
         return true;
