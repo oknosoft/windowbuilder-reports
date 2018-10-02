@@ -1,5 +1,5 @@
 /*!
- windowbuilder-reports v2.0.242, built:2018-09-30
+ windowbuilder-reports v2.0.242, built:2018-10-02
  © 2014-2018 Evgeniy Malyarov and the Oknosoft team http://www.oknosoft.ru
  To obtain commercial license and technical support, contact info@oknosoft.ru
  */
@@ -12,7 +12,6 @@ function _interopDefault (ex) { return (ex && (typeof ex === 'object') && 'defau
 var metaCore = _interopDefault(require('metadata-core'));
 var metaPouchdb = _interopDefault(require('metadata-pouchdb'));
 var paper = _interopDefault(require('paper/dist/paper-core'));
-var request = _interopDefault(require('request'));
 var Router = _interopDefault(require('koa-better-router'));
 var Koa = _interopDefault(require('koa'));
 var cors = _interopDefault(require('@koa/cors'));
@@ -269,58 +268,69 @@ class Editor extends EditorInvisible {
 }
 $p$1.Editor = Editor;
 
+const fetch = require('node-fetch');
 const auth_cache = {};
 const couch_public = `${process.env.COUCHPUBLIC}${process.env.ZONE}_doc`;
+const couch_local = `${process.env.COUCHLOCAL.replace('/wb_', '')}/_session`;
 var auth = async (ctx, {cat}) => {
-  let {authorization, suffix} = ctx.req.headers;
-  if(!authorization || !suffix){
+  let {authorization} = ctx.req.headers;
+  if(!authorization){
     ctx.status = 403;
     ctx.body = 'access denied';
     return;
   }
-  const _auth = {'username': ''};
+  const _auth = {'username': '', roles: []};
   const resp = await new Promise((resolve, reject) => {
     function set_cache(key, auth) {
       auth_cache[key] = Object.assign({}, _auth, {stamp: Date.now(), auth});
       resolve(auth);
     }
     const auth_str = authorization.substr(6);
-    try{
-      const cached = auth_cache[auth_str];
-      if(cached && (cached.stamp + 30 * 60 * 1000) > Date.now()) {
-        Object.assign(_auth, cached);
-        return resolve(cached.auth);
-      }
-      const auth = new Buffer(auth_str, 'base64').toString();
-      const sep = auth.indexOf(':');
-      _auth.pass = auth.substr(sep + 1);
-      _auth.username = auth.substr(0, sep);
-      while (suffix.length < 4){
-        suffix = '0' + suffix;
-      }
-      _auth.suffix = suffix;
-      request({
-        url: couch_public + (suffix === '0000' ? '' : `_${suffix}`),
-        auth: {'user':_auth.username, 'pass':_auth.pass, sendImmediately: true}
-      }, (e, r, body) => {
-        if(r && r.statusCode < 201){
-          set_cache(auth_str, true);
+    const cached = auth_cache[auth_str];
+    if(cached && (cached.stamp + 30 * 60 * 1000) > Date.now()) {
+      Object.assign(_auth, cached);
+      return resolve(cached.auth);
+    }
+    fetch(couch_local, {headers: ctx.req.headers})
+      .then((res) => {
+        return res.json();
+      })
+      .then(({ok, userCtx}) => {
+        if(!ok) {
+          return set_cache(auth_str, false);
         }
-        else{
-          ctx.status = (r && r.statusCode) || 500;
-          ctx.body = body || (e && e.message);
-          set_cache(auth_str, false);
+        _auth.username = userCtx.name;
+        for(const role of userCtx.roles) {
+          if(role.startsWith('suffix:')) {
+            _auth.suffix = role.substr(7);
+          }
+          else if(role.startsWith('ref:')) {
+            _auth.user = cat.users.get(role.substr(4));
+          }
+          else if(role.startsWith('branch:')) {
+            _auth.branch = cat.branches.get(role.substr(7));
+          }
+          else {
+            _auth.roles.push(role);
+          }
         }
+        while (_auth.suffix.length < 4){
+          _auth.suffix = '0' + _auth.suffix;
+        }
+        if(!_auth.branch) {
+          _auth.branch = _auth.user.branch;
+        }
+        return _auth.branch.is_new() && !_auth.branch.empty() && _auth.branch.load();
+      })
+      .then(() => set_cache(auth_str, true))
+      .catch((e) => {
+        ctx.status = 500;
+        ctx.body = e.message;
+        delete auth_cache[auth_str];
+        resolve(false);
       });
-    }
-    catch(e){
-      ctx.status = 500;
-      ctx.body = e.message;
-      delete auth_cache[auth_str];
-      resolve(false);
-    }
   });
-  return ctx._auth = resp && Object.assign(_auth, {user: cat.users.by_id(_auth.username)});
+  return ctx._auth = resp && _auth;
 };
 
 const debug$2 = require('debug')('wb:indexer');
@@ -343,6 +353,8 @@ const indexer = {
   by_date: {},
   _count: 0,
   _ready: false,
+  sort() {
+  },
   put(indoc, force) {
     const doc = {};
     fields.forEach((fld) => {
@@ -385,7 +397,7 @@ const indexer = {
     }
     return res;
   },
-  find({selector, limit, skip = 0}) {
+  find({selector, limit, skip = 0}, {branch}) {
     let dfrom, dtill, from, till, search;
     for(const row of selector.$and) {
       const fld = Object.keys(row)[0];
@@ -417,10 +429,18 @@ const indexer = {
         return true;
       }
     }
+    const partners = branch.partners._obj.map(({acl_obj}) => acl_obj);
+    const divisions = branch.divisions._obj.map(({acl_obj}) => acl_obj);
     while(part = indexer.get(from, till, step)) {
       step += 1;
       for(const doc of part) {
         if(doc.date < dfrom || doc.date > dtill) {
+          continue;
+        }
+        if(doc.partner && partners.length && !partners.includes(doc.partner)) {
+          continue;
+        }
+        if(doc.department && divisions.length && !divisions.includes(doc.department)) {
           continue;
         }
         let ok = true;
@@ -495,9 +515,9 @@ var search = async (ctx, next) => {
   await auth(ctx, $p)
     .then(() => json(ctx))
     .catch(() => null);
-  if(ctx._auth && ctx._json) {
+  if(ctx._json && ctx._auth) {
     try{
-      ctx.body = {docs : indexer.find(ctx._json)};
+      ctx.body = {docs : indexer.find(ctx._json, ctx._auth)};
       ctx.status = 200;
     }
     catch(err){

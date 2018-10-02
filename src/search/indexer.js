@@ -86,7 +86,7 @@ const indexer = {
   },
 
   // перебирает кеш в диапазоне дат
-  find({selector, limit, skip = 0}) {
+  find({selector, limit, skip = 0}, {branch}) {
     let dfrom, dtill, from, till, search;
     for(const row of selector.$and) {
       const fld = Object.keys(row)[0];
@@ -120,6 +120,9 @@ const indexer = {
       }
     }
 
+    const partners = branch.partners._obj.map(({acl_obj}) => acl_obj);
+    const divisions = branch.divisions._obj.map(({acl_obj}) => acl_obj);
+
     // получаем очередной кусочек кеша
     while(part = indexer.get(from, till, step)) {
       step += 1;
@@ -128,6 +131,16 @@ const indexer = {
 
         // фильтруем по дате
         if(doc.date < dfrom || doc.date > dtill) {
+          continue;
+        }
+
+        // фильтруем по контрагенту acl
+        if(doc.partner && partners.length && !partners.includes(doc.partner)) {
+          continue;
+        }
+
+        // фильтруем по подразделению acl
+        if(doc.department && divisions.length && !divisions.includes(doc.department)) {
           continue;
         }
 
