@@ -270,7 +270,6 @@ $p$1.Editor = Editor;
 
 const fetch = require('node-fetch');
 const auth_cache = {};
-const couch_public = `${process.env.COUCHPUBLIC}${process.env.ZONE}_doc`;
 const couch_local = `${process.env.COUCHLOCAL.replace('/wb_', '')}/_session`;
 var auth = async (ctx, {cat}) => {
   let {authorization} = ctx.req.headers;
@@ -353,7 +352,24 @@ const indexer = {
   by_date: {},
   _count: 0,
   _ready: false,
+  sortfn(a, b) {
+    if (a.date < b.date){
+      return -1;
+    }
+    else if (a.date > b.date){
+      return 1;
+    }
+    else{
+      return 0;
+    }
+  },
   sort() {
+    debug$2('sorting');
+    for(const date in indexer.by_date) {
+      indexer.by_date[date].sort(indexer.sortfn);
+    }
+    indexer._ready = true;
+    debug$2('ready');
   },
   put(indoc, force) {
     const doc = {};
@@ -372,33 +388,55 @@ const indexer = {
         }
       })){
         arr.push(doc);
+        !force && arr.sort(indexer.sortfn);
       }
     }
     else {
       indexer.by_date[date] = [doc];
     }
   },
-  get(from, till, step) {
-    if(step) {
-      let [year, month] = from.split('-');
-      month = parseInt(month, 10) + step;
-      while (month > 12) {
-        year = parseInt(year, 10) + 1;
-        month -= 12;
+  get(from, till, step, desc) {
+    if(desc) {
+      if(step) {
+        let [year, month] = till.split('-');
+        month = parseInt(month, 10) - step;
+        while (month < 1) {
+          year = parseInt(year, 10) - 1;
+          month += 12;
+        }
+        till = `${year}-${month.pad(2)}`;
       }
-      from = `${year}-${month.pad(2)}`;
+      if(till < from) {
+        return null;
+      }
+      let res = indexer.by_date[till];
+      if(!res) {
+        res = [];
+      }
+      return res;
     }
-    if(from > till) {
-      return null;
+    else {
+      if(step) {
+        let [year, month] = from.split('-');
+        month = parseInt(month, 10) + step;
+        while (month > 12) {
+          year = parseInt(year, 10) + 1;
+          month -= 12;
+        }
+        from = `${year}-${month.pad(2)}`;
+      }
+      if(from > till) {
+        return null;
+      }
+      let res = indexer.by_date[from];
+      if(!res) {
+        res = [];
+      }
+      return res;
     }
-    let res = indexer.by_date[from];
-    if(!res) {
-      res = [];
-    }
-    return res;
   },
-  find({selector, limit, skip = 0}, {branch}) {
-    let dfrom, dtill, from, till, search;
+  find({selector, sort, limit, skip = 0}, {branch}) {
+    let dfrom, dtill, from, till, search, department, state;
     for(const row of selector.$and) {
       const fld = Object.keys(row)[0];
       const cond = Object.keys(row[fld])[0];
@@ -415,7 +453,21 @@ const indexer = {
       else if(fld === 'search') {
         search = row[fld][cond] ? row[fld][cond].toLowerCase().split(' ') : [];
       }
+      else if(fld === 'department') {
+        department = cond ? row[fld][cond] : row[fld];
+      }
+      else if(fld === 'state') {
+        state = cond ? row[fld][cond] : row[fld];
+      }
     }
+    if(sort && sort.length && sort[0][Object.keys(sort[0])[0]] === 'desc' || sort === 'desc') {
+      sort = 'desc';
+    }
+    else {
+      sort = 'asc';
+    }
+    const partners = branch.partners._obj.map(({acl_obj}) => acl_obj);
+    const divisions = branch.divisions._obj.map(({acl_obj}) => acl_obj);
     let part, step = 0;
     const res = [];
     function add(doc) {
@@ -429,35 +481,47 @@ const indexer = {
         return true;
       }
     }
-    const partners = branch.partners._obj.map(({acl_obj}) => acl_obj);
-    const divisions = branch.divisions._obj.map(({acl_obj}) => acl_obj);
-    while(part = indexer.get(from, till, step)) {
+    function check(doc) {
+      if(doc.date < dfrom || doc.date > dtill) {
+        return;
+      }
+      if(doc.partner && partners.length && !partners.includes(doc.partner)) {
+        return;
+      }
+      if(doc.department && divisions.length && !divisions.includes(doc.department)) {
+        return;
+      }
+      let ok = true;
+      for(const word of search) {
+        if(!word) {
+          continue;
+        }
+        if(!search_fields.some((fld) => {
+          const val = doc[fld];
+          return val && typeof val === 'string' && val.toLowerCase().includes(word);
+        })){
+          ok = false;
+          break;
+        }
+      }
+      return ok;
+    }
+    while(part = indexer.get(from, till, step, sort === 'desc')) {
       step += 1;
-      for(const doc of part) {
-        if(doc.date < dfrom || doc.date > dtill) {
-          continue;
-        }
-        if(doc.partner && partners.length && !partners.includes(doc.partner)) {
-          continue;
-        }
-        if(doc.department && divisions.length && !divisions.includes(doc.department)) {
-          continue;
-        }
-        let ok = true;
-        for(const word of search) {
-          if(!word) {
-            continue;
-          }
-          if(!search_fields.some((fld) => {
-            const val = doc[fld];
-            return val && typeof val === 'string' && val.toLowerCase().includes(word);
-          })){
-            ok = false;
-            break;
+      if(sort === 'desc') {
+        for(let i = part.length - 1; i >= 0; i--){
+          const doc = part[i];
+          if(check(doc) && !add(doc)) {
+            return res;
           }
         }
-        if(ok && !add(doc)) {
-          return res;
+      }
+      else {
+        for(let i = 0; i < part.length; i++){
+          const doc = part[i];
+          if(check(doc) && !add(doc)) {
+            return res;
+          }
         }
       }
     }
@@ -484,8 +548,7 @@ const indexer = {
         }
         debug$2(`indexed ${indexer._count} ${bookmark.substr(10, 30)}`);
         if(docs.length < 10000) {
-          indexer._ready = true;
-          debug$2('ready');
+          indexer.sort();
         }
         else {
           indexer.init(bookmark);

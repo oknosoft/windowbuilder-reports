@@ -2,7 +2,6 @@
 const fetch = require('node-fetch');
 
 const auth_cache = {};
-const couch_public = `${process.env.COUCHPUBLIC}${process.env.ZONE}_doc`;
 const couch_local = `${process.env.COUCHLOCAL.replace('/wb_', '')}/_session`;
 
 export default async (ctx, {cat}) => {
