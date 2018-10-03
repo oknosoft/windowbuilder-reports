@@ -1,5 +1,5 @@
 /*!
- windowbuilder-reports v2.0.242, built:2018-10-02
+ windowbuilder-reports v2.0.242, built:2018-10-03
  © 2014-2018 Evgeniy Malyarov and the Oknosoft team http://www.oknosoft.ru
  To obtain commercial license and technical support, contact info@oknosoft.ru
  */
@@ -333,7 +333,7 @@ var auth = async (ctx, {cat}) => {
 };
 
 const debug$2 = require('debug')('wb:indexer');
-const {adapters: {pouch}, doc: {calc_order}} = $p$1;
+const {adapters: {pouch}, doc: {calc_order}, utils} = $p$1;
 const fields = [
   '_id',
   'state',
@@ -352,7 +352,7 @@ const indexer = {
   by_date: {},
   _count: 0,
   _ready: false,
-  sortfn(a, b) {
+  sort_fn(a, b) {
     if (a.date < b.date){
       return -1;
     }
@@ -366,7 +366,7 @@ const indexer = {
   sort() {
     debug$2('sorting');
     for(const date in indexer.by_date) {
-      indexer.by_date[date].sort(indexer.sortfn);
+      indexer.by_date[date].sort(indexer.sort_fn);
     }
     indexer._ready = true;
     debug$2('ready');
@@ -388,7 +388,7 @@ const indexer = {
         }
       })){
         arr.push(doc);
-        !force && arr.sort(indexer.sortfn);
+        !force && arr.sort(indexer.sort_fn);
       }
     }
     else {
@@ -435,7 +435,7 @@ const indexer = {
       return res;
     }
   },
-  find({selector, sort, limit, skip = 0}, {branch}) {
+  find({selector, sort, ref, limit, skip = 0}, {branch}) {
     let dfrom, dtill, from, till, search, department, state;
     for(const row of selector.$and) {
       const fld = Object.keys(row)[0];
@@ -468,17 +468,25 @@ const indexer = {
     }
     const partners = branch.partners._obj.map(({acl_obj}) => acl_obj);
     const divisions = branch.divisions._obj.map(({acl_obj}) => acl_obj);
-    let part, step = 0;
-    const res = [];
+    let part,
+      step = 0,
+      flag = skip === 0 && utils.is_guid(ref),
+      scroll = 0,
+      count = 0;
+    const docs = [];
     function add(doc) {
+      count++;
+      if(flag && doc._id.endsWith(ref)) {
+        scroll = count - 1;
+        flag = false;
+      }
       if(skip > 0) {
         skip--;
-        return true;
+        return;
       }
       if(limit > 0) {
         limit--;
-        res.push(doc);
-        return true;
+        docs.push(doc);
       }
     }
     function check(doc) {
@@ -504,28 +512,22 @@ const indexer = {
           break;
         }
       }
-      return ok;
+      ok && add(doc);
     }
     while(part = indexer.get(from, till, step, sort === 'desc')) {
       step += 1;
       if(sort === 'desc') {
         for(let i = part.length - 1; i >= 0; i--){
-          const doc = part[i];
-          if(check(doc) && !add(doc)) {
-            return res;
-          }
+          check(part[i]);
         }
       }
       else {
         for(let i = 0; i < part.length; i++){
-          const doc = part[i];
-          if(check(doc) && !add(doc)) {
-            return res;
-          }
+          check(part[i]);
         }
       }
     }
-    return res;
+    return {docs, scroll, flag, count};
   },
   init(bookmark) {
     if(!bookmark) {
@@ -580,7 +582,7 @@ var search = async (ctx, next) => {
     .catch(() => null);
   if(ctx._json && ctx._auth) {
     try{
-      ctx.body = {docs : indexer.find(ctx._json, ctx._auth)};
+      ctx.body = indexer.find(ctx._json, ctx._auth);
       ctx.status = 200;
     }
     catch(err){

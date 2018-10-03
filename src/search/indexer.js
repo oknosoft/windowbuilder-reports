@@ -36,7 +36,7 @@ const indexer = {
   _ready: false,
 
   // компаратор сортировки
-  sortfn(a, b) {
+  sort_fn(a, b) {
     if (a.date < b.date){
       return -1;
     }
@@ -52,7 +52,7 @@ const indexer = {
   sort() {
     debug('sorting');
     for(const date in indexer.by_date) {
-      indexer.by_date[date].sort(indexer.sortfn);
+      indexer.by_date[date].sort(indexer.sort_fn);
     }
     indexer._ready = true;
     debug('ready');
@@ -76,7 +76,7 @@ const indexer = {
         }
       })){
         arr.push(doc);
-        !force && arr.sort(indexer.sortfn);
+        !force && arr.sort(indexer.sort_fn);
       }
     }
     else {
@@ -168,27 +168,26 @@ const indexer = {
       // выборка диапазона кеша
       step = 0,
       // флаг поиска страницы со ссылкой
-      flag = utils.is_guid(ref);
+      flag = skip === 0 && utils.is_guid(ref),
+      // результат поиска строки со ссылкой
+      scroll = 0,
+      count = 0;
 
-    const res = [];
+    const docs = [];
 
     function add(doc) {
-      if(flag) {
-        res.push(doc);
-        if(doc._id.endsWith(ref)) {
-          flag = false;
-          const len = res.length;
-        }
-        return true;
+      count++;
+      if(flag && doc._id.endsWith(ref)) {
+        scroll = count - 1;
+        flag = false;
       }
       if(skip > 0) {
         skip--;
-        return true;
+        return;
       }
       if(limit > 0) {
         limit--;
-        res.push(doc);
-        return true;
+        docs.push(doc);
       }
     }
 
@@ -222,7 +221,8 @@ const indexer = {
           break;
         }
       }
-      return ok;
+
+      ok && add(doc);
     }
 
     // получаем очередной кусочек кеша
@@ -231,23 +231,17 @@ const indexer = {
       // фильтруем
       if(sort === 'desc') {
         for(let i = part.length - 1; i >= 0; i--){
-          const doc = part[i];
-          if(check(doc) && !add(doc)) {
-            return res;
-          }
+          check(part[i]);
         }
       }
       else {
         for(let i = 0; i < part.length; i++){
-          const doc = part[i];
-          if(check(doc) && !add(doc)) {
-            return res;
-          }
+          check(part[i]);
         }
       }
     }
 
-    return res;
+    return {docs, scroll, flag, count};
   },
 
   // формирует начальный дамп

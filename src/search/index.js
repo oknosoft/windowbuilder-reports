@@ -35,7 +35,7 @@ export default async (ctx, next) => {
 
   if(ctx._json && ctx._auth) {
     try{
-      ctx.body = {docs : indexer.find(ctx._json, ctx._auth)};
+      ctx.body = indexer.find(ctx._json, ctx._auth);
       ctx.status = 200;
     }
     catch(err){
