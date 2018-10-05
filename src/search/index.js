@@ -40,7 +40,7 @@ export default async (ctx, next) => {
     }
     catch(err){
       ctx.status = 500;
-      ctx.body = err.stack;
+      ctx.body = err.message;
       console.error(err);
     }
   }
