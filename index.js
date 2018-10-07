@@ -1,5 +1,5 @@
 /*!
- windowbuilder-reports v2.0.242, built:2018-10-05
+ windowbuilder-reports v2.0.242, built:2018-10-07
  © 2014-2018 Evgeniy Malyarov and the Oknosoft team http://www.oknosoft.ru
  To obtain commercial license and technical support, contact info@oknosoft.ru
  */
@@ -46,6 +46,7 @@ $p$1.wsql.init(settings);
       debug(`loadind to ram: page №${page.page} (${page.page * page.limit} from ${page.total_rows})`);
     },
     pouch_complete_loaded(page) {
+      job_prm.complete_loaded = true;
       debug(`ready to receive queries, listen on port: ${process.env.PORT || 3030}`);
     },
     pouch_doc_ram_loaded() {
@@ -53,9 +54,11 @@ $p$1.wsql.init(settings);
         since: 'now',
         live: true,
         include_docs: true,
-      }).on('change', (change) => {
+      })
+        .on('change', (change) => {
         pouch.load_changes({docs: [change.doc]});
-      }).on('error', (err) => {
+      })
+        .on('error', (err) => {
         debug(`change error ${err}`);
       });
       debug(`loadind to ram: READY`);
@@ -227,6 +230,11 @@ var executer = async (ctx, next) => {
     ctx.body = 'ip restricted: ' + ip;
     return;
   }
+  if(!$p.job_prm.complete_loaded) {
+    ctx.status = 403;
+    ctx.body = 'loading to ram, wait 1 minute';
+    return;
+  }
   try{
     switch (ctx.params.class){
       case 'doc.calc_order':
@@ -332,7 +340,6 @@ var auth = async (ctx, {cat}) => {
   return ctx._auth = resp && _auth;
 };
 
-const debug$2 = require('debug')('wb:indexer');
 const {adapters: {pouch}, doc: {calc_order}, classes} = $p$1;
 const fields = [
   '_id',
@@ -359,10 +366,10 @@ function json(ctx) {
       try {
         resolve(ctx._json = JSON.parse(rawData));
       }
-      catch (e) {
+      catch (err) {
         ctx.status = 500;
-        ctx.body = e.message;
-        reject(e);
+        ctx.body = err.message;
+        reject(err);
       }
     });
   });
@@ -377,15 +384,15 @@ var search = async (ctx, next) => {
       ctx.status = 200;
     }
     catch(err){
-      ctx.status = 500;
+      ctx.status = err.status || 500;
       ctx.body = err.message;
       console.error(err);
     }
   }
 };
 
-const debug$3 = require('debug')('wb:router');
-debug$3('start');
+const debug$2 = require('debug')('wb:router');
+debug$2('start');
 const rep = Router({ prefix: '/r' });
 rep.loadMethods()
   .get('/', async (ctx, next) => {

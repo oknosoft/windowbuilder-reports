@@ -56,6 +56,7 @@ $p.wsql.init(settings);
       debug(`loadind to ram: page №${page.page} (${page.page * page.limit} from ${page.total_rows})`);
     },
     pouch_complete_loaded(page) {
+      job_prm.complete_loaded = true;
       debug(`ready to receive queries, listen on port: ${process.env.PORT || 3030}`);
     },
     pouch_doc_ram_loaded() {
@@ -63,10 +64,12 @@ $p.wsql.init(settings);
         since: 'now',
         live: true,
         include_docs: true,
-      }).on('change', (change) => {
+      })
+        .on('change', (change) => {
         // формируем новый
         pouch.load_changes({docs: [change.doc]});
-      }).on('error', (err) => {
+      })
+        .on('error', (err) => {
         debug(`change error ${err}`);
       });
       debug(`loadind to ram: READY`);

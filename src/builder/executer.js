@@ -211,6 +211,13 @@ export default async (ctx, next) => {
     return;
   }
 
+  // контролируем загруженность справочников
+  if(!$p.job_prm.complete_loaded) {
+    ctx.status = 403;
+    ctx.body = 'loading to ram, wait 1 minute';
+    return;
+  }
+
   // проверяем авторизацию
   // let {authorization, suffix} = ctx.req.headers;
   // if(!authorization || !suffix){

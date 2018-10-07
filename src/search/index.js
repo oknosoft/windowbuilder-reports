@@ -17,10 +17,10 @@ function json(ctx) {
       try {
         resolve(ctx._json = JSON.parse(rawData));
       }
-      catch (e) {
+      catch (err) {
         ctx.status = 500;
-        ctx.body = e.message;
-        reject(e);
+        ctx.body = err.message;
+        reject(err);
       }
     });
   });
@@ -39,7 +39,7 @@ export default async (ctx, next) => {
       ctx.status = 200;
     }
     catch(err){
-      ctx.status = 500;
+      ctx.status = err.status || 500;
       ctx.body = err.message;
       console.error(err);
     }
