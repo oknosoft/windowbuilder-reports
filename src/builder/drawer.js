@@ -2619,7 +2619,7 @@ class DimensionLine extends paper.Group {
 
   redraw() {
 
-    const {children, path, align} = this;
+    const {children, path, align, project: {builder_props}} = this;
     if(!children.length){
       return;
     }
@@ -2671,7 +2671,7 @@ class DimensionLine extends paper.Group {
     children.callout2.visible = !this.hide_c2;
     children.scale.visible = !this.hide_line;
 
-    children.text.content = length.toFixed(0);
+    children.text.content = length.round(builder_props.rounding).toString();
     children.text.rotation = e.subtract(b).angle;
     children.text.justification = align.ref;
 
@@ -3927,8 +3927,8 @@ class Filling extends AbstractFilling(BuilderElement) {
     this.sendToBack();
 
     const {path, imposts, _attr, is_rectangular} = this;
-    const {elm_font_size} = consts;
-
+    const {elm_font_size, font_family} = consts;
+    const text_font_size = elm_font_size * (2 / 3);
     path.visible = true;
     imposts.forEach((elm) => elm.redraw());
 
@@ -3938,18 +3938,36 @@ class Filling extends AbstractFilling(BuilderElement) {
       _attr._text = new paper.PointText({
         parent: this,
         fillColor: 'black',
-        fontFamily: consts.font_family,
-        fontSize: elm_font_size,
+        fontFamily: font_family,
+        fontSize: text_font_size,
         guide: true,
       });
     }
+
+    const {bounds} = path;
+    const horizontal = bounds.width * 1.5 > bounds.height;
+    const bigSide = horizontal ? bounds.width : bounds.height;
+    const smallSide = !horizontal ? bounds.width : bounds.height;
+    const turn = smallSide < 490 ? !horizontal : false;
+    let font_size = bigSide < 490
+      ? Math.round(text_font_size * bigSide / 490)
+      : text_font_size;
+    _attr._text.content = this.formula();
     _attr._text.visible = is_rectangular;
+    _attr._text.fontSize = font_size;
+
+    const {bounds: textBounds} = _attr._text;
+    while(font_size < text_font_size && Math.max(textBounds.width, textBounds.height) + 6 * font_size < bigSide){
+      font_size += 2;
+      _attr._text.fontSize = font_size > text_font_size ? text_font_size : font_size;
+    }
 
     if(is_rectangular){
-      const {bounds} = path;
-      _attr._text.content = this.formula();
-      _attr._text.point = bounds.bottomLeft.add([elm_font_size * 0.6, -elm_font_size]);
-      if(_attr._text.bounds.width > (bounds.width - 2 * elm_font_size)){
+      _attr._text.point = turn
+        ? bounds.bottomRight.add([-font_size, -font_size * 0.6])
+        : bounds.bottomLeft.add([font_size * 0.6, -font_size]);
+      _attr._text.rotation = turn ? 270 : 0;
+      if(textBounds.width > (bigSide - 2 * font_size)){
         const atext = _attr._text.content.split(' ');
         if(atext.length > 1){
           _attr._text.content = '';
@@ -3961,7 +3979,7 @@ class Filling extends AbstractFilling(BuilderElement) {
               _attr._text.content += ((index === atext.length - 1) ? '\n' : ' ') + text;
             }
           })
-          _attr._text.point.y -= elm_font_size;
+          _attr._text.point.y -= font_size;
         }
       }
     }
@@ -11904,7 +11922,7 @@ $p.CatCharacteristics = class CatCharacteristics extends $p.CatCharacteristics {
     }
     for(const prop in defaults){
       if(tmp.hasOwnProperty(prop)) {
-        props[prop] = !!tmp[prop];
+        props[prop] = typeof tmp[prop] === 'number' ? tmp[prop] : !!tmp[prop];
       }
       else {
         props[prop] = defaults[prop];
@@ -12046,7 +12064,8 @@ $p.CatCharacteristics.builder_props_defaults = {
   custom_lines: true,
   cnns: true,
   visualization: true,
-  txts: true
+  txts: true,
+  rounding: 0,
 };
 
 $p.CatCharacteristicsInsertsRow.prototype.value_change = function (field, type, value) {
@@ -13215,6 +13234,9 @@ $p.cat.inserts.__define({
               for(const choice of adel) {
                 mf.choice_params.splice(mf.choice_params.indexOf(choice), 1);
               }
+            }
+            else {
+              mf.choice_params = [];
             }
 
             const prms = new Set();

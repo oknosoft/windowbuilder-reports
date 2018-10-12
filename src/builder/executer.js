@@ -1,6 +1,8 @@
+const url = require('url');
+const qs = require('qs');
 
 // формирует структуру с эскизами заполнений
-async function glasses({project, view, prod, res}) {
+async function glasses({project, view, prod, res, builder_props}) {
   for(const ox of prod){
 
     const {_obj: {glasses, coordinates}, name} = ox;
@@ -12,7 +14,7 @@ async function glasses({project, view, prod, res}) {
     };
 
     if(coordinates && coordinates.length){
-      await project.load(ox, true);
+      await project.load(ox, builder_props || true);
 
       ox.glasses.forEach((row) => {
         const glass = project.draw_fragment({elm: row.elm});
@@ -37,10 +39,20 @@ async function prod(ctx, next) {
   const prod = await calc_order.load_production(true);
   const res = {number_doc: calc_order.number_doc};
 
-  const {query} = require('url').parse(ctx.req.url);
+  const {query} = url.parse(ctx.req.url);
+  let prms, builder_props;
+  if(query && query.length > 3) {
+    prms = qs.parse(query.replace('?',''));
+    if(prms.builder_props) {
+      try{
+        builder_props = JSON.parse(prms.builder_props);
+      }
+      catch(err){}
+    }
+  }
 
-  if(query && query.indexOf('glasses') !== -1) {
-    await glasses({project, view, prod, res});
+  if(prms && prms.hasOwnProperty('glasses')) {
+    await glasses({project, view, prod, res, builder_props});
   }
   else{
     for(let ox of prod){
@@ -73,7 +85,7 @@ async function prod(ctx, next) {
 
       if(_obj.coordinates && _obj.coordinates.length){
 
-        await project.load(ox, true)
+        await project.load(ox, builder_props || true)
           .then(() => {
             res[ref].imgs = {
               'l0': view.element.toBuffer().toString('base64')
