@@ -10,7 +10,7 @@
 
 import $p from '../metadata';
 
-const {adapters: {pouch}, doc: {calc_order}, classes} = $p;
+const {adapters: {pouch}, doc: {calc_order}, classes, utils} = $p;
 const fields = [
   '_id',
   'state',
@@ -70,7 +70,7 @@ class RamIndexer extends classes.RamIndexer {
       sort = 'asc';
     }
 
-    const {_search_fields, _mgr} = this;
+    const {_search_fields} = this;
     const partners = branch.partners._obj.map(({acl_obj}) => acl_obj);
     const divisions = branch.divisions._obj.map(({acl_obj}) => acl_obj);
 
@@ -78,7 +78,7 @@ class RamIndexer extends classes.RamIndexer {
       // выборка диапазона кеша
       step = 0,
       // флаг поиска страницы со ссылкой
-      flag = skip === 0 && _mgr._owner.$p.utils.is_guid(ref),
+      flag = skip === 0 && utils.is_guid(ref),
       // результат поиска строки со ссылкой
       scroll = 0,
       count = 0;

@@ -1,5 +1,5 @@
 /*!
- windowbuilder-reports v2.0.242, built:2018-10-12
+ windowbuilder-reports v2.0.242, built:2018-10-21
  © 2014-2018 Evgeniy Malyarov and the Oknosoft team http://www.oknosoft.ru
  To obtain commercial license and technical support, contact info@oknosoft.ru
  */
@@ -352,7 +352,7 @@ var auth = async (ctx, {cat}) => {
   return ctx._auth = resp && _auth;
 };
 
-const {adapters: {pouch}, doc: {calc_order}, classes} = $p$1;
+const {adapters: {pouch}, doc: {calc_order}, classes, utils} = $p$1;
 const fields = [
   '_id',
   'state',
@@ -405,12 +405,12 @@ class RamIndexer extends classes.RamIndexer {
     else {
       sort = 'asc';
     }
-    const {_search_fields, _mgr} = this;
+    const {_search_fields} = this;
     const partners = branch.partners._obj.map(({acl_obj}) => acl_obj);
     const divisions = branch.divisions._obj.map(({acl_obj}) => acl_obj);
     let part,
       step = 0,
-      flag = skip === 0 && _mgr._owner.$p.utils.is_guid(ref),
+      flag = skip === 0 && utils.is_guid(ref),
       scroll = 0,
       count = 0;
     const docs = [];
