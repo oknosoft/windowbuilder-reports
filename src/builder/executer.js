@@ -33,7 +33,7 @@ async function glasses({project, view, prod, res, builder_props}) {
 // формирует json описания продукции с эскизами
 async function prod(ctx, next) {
 
-  const {project, view} = new $p.Editor();
+  let editor = new $p.Editor();
   const {nom} = $p.cat;
   const calc_order = await $p.doc.calc_order.get(ctx.params.ref, 'promise');
   const prod = await calc_order.load_production(true);
@@ -52,77 +52,96 @@ async function prod(ctx, next) {
   }
 
   if(prms && prms.hasOwnProperty('glasses')) {
+    const {project, view} = editor;
     await glasses({project, view, prod, res, builder_props});
   }
   else{
-    for(let ox of prod){
+    let counter = 8;
+    for(const ox of prod){
 
-      // project.draw_fragment({elm: -1});
-      // view.update();
-      // ctx.type = 'image/png';
-      // ctx.body = return view.element.toBuffer();
+      try {
+        counter--;
+        if(counter < 0) {
+          counter = 8;
+          editor.unload();
+          editor = new $p.Editor();
+        }
+        const {project, view} = editor;
+        // project.draw_fragment({elm: -1});
+        // view.update();
+        // ctx.type = 'image/png';
+        // ctx.body = return view.element.toBuffer();
 
-      const {_obj} = ox;
-      const ref = $p.utils.snake_ref(ox.ref);
-      res[ref] = {
-        constructions: _obj.constructions || [],
-        coordinates: _obj.coordinates || [],
-        specification: _obj.specification ? _obj.specification.map((o) => Object.assign(o, {article: nom.get(o.nom).article})) : [],
-        glasses: _obj.glasses,
-        params: _obj.params,
-        clr: _obj.clr,
-        sys: _obj.sys,
-        x: _obj.x,
-        y: _obj.y,
-        z: _obj.z,
-        s: _obj.s,
-        weight: _obj.weight,
-        origin: _obj.origin,
-        leading_elm: _obj.leading_elm,
-        leading_product: _obj.leading_product,
-        product: _obj.product,
-    };
+        const {_obj} = ox;
+        const ref = $p.utils.snake_ref(ox.ref);
+        res[ref] = {
+          constructions: _obj.constructions || [],
+          coordinates: _obj.coordinates || [],
+          specification: _obj.specification ? _obj.specification.map((o) => Object.assign(o, {article: nom.get(o.nom).article})) : [],
+          glasses: _obj.glasses,
+          params: _obj.params,
+          clr: _obj.clr,
+          sys: _obj.sys,
+          x: _obj.x,
+          y: _obj.y,
+          z: _obj.z,
+          s: _obj.s,
+          weight: _obj.weight,
+          origin: _obj.origin,
+          leading_elm: _obj.leading_elm,
+          leading_product: _obj.leading_product,
+          product: _obj.product,
+        };
 
-      if(_obj.coordinates && _obj.coordinates.length){
+        if(_obj.coordinates && _obj.coordinates.length){
 
-        await project.load(ox, builder_props || true)
-          .then(() => {
-            res[ref].imgs = {
-              'l0': view.element.toBuffer().toString('base64')
-            };
+          await project.load(ox, builder_props || true)
+            .then(() => {
+              res[ref].imgs = {
+                'l0': view.element.toBuffer().toString('base64')
+              };
 
-        ox.constructions.forEach(({cnstr}) => {
-          project.draw_fragment({elm: -cnstr});
-          res[ref].imgs[`l${cnstr}`] = view.element.toBuffer().toString('base64');
-        });
+              ox.constructions.forEach(({cnstr}) => {
+                project.draw_fragment({elm: -cnstr});
+                res[ref].imgs[`l${cnstr}`] = view.element.toBuffer().toString('base64');
+              });
 
-        ox.glasses.forEach((row) => {
-          const glass = project.draw_fragment({elm: row.elm});
-          // подтянем формулу стеклопакета
-          res[ref].imgs[`g${row.elm}`] = view.element.toBuffer().toString('base64');
-          if(glass){
-            row.formula = glass.formula(true);
-            glass.visible = false;
-          }
-        });
-        });
+              ox.glasses.forEach((row) => {
+                const glass = project.draw_fragment({elm: row.elm});
+                // подтянем формулу стеклопакета
+                res[ref].imgs[`g${row.elm}`] = view.element.toBuffer().toString('base64');
+                if(glass){
+                  row.formula = glass.formula(true);
+                  glass.visible = false;
+                }
+              });
+
+              ox._data._modified = false;
+            })
+            .then(() => {
+              project.clear();
+              ox.unload();
+            });
+        }
+      }
+      catch(err) {
+        err = null;
       }
     }
   }
 
   ctx.body = res;
 
-  setTimeout(() => {
-    try{
+  Promise.resolve()
+    .then(() => {
       calc_order.unload();
-      project.unload();
+      editor.unload();
       for(const ox of prod){
         ox.unload();
       };
       prod.length = 0;
-    }
-    catch(err){}
-  });
+    })
+    .catch((err) => null);
 
 }
 
