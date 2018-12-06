@@ -111,7 +111,7 @@ async function prod(ctx, next) {
                 // подтянем формулу стеклопакета
                 res[ref].imgs[`g${row.elm}`] = view.element.toBuffer().toString('base64');
                 if(glass){
-                  row.formula = glass.formula(true);
+                  res[ref].glasses[row.row - 1].formula = glass.formula(true);
                   glass.visible = false;
                 }
               });
