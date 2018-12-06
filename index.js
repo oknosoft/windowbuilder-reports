@@ -141,7 +141,7 @@ async function prod(ctx, next) {
           leading_elm: _obj.leading_elm,
           leading_product: _obj.leading_product,
           product: _obj.product,
-        };
+        }._clone();
         if(_obj.coordinates && _obj.coordinates.length){
           await project.load(ox, builder_props || true)
             .then(() => {
@@ -164,6 +164,7 @@ async function prod(ctx, next) {
             })
             .then(() => {
               project.clear();
+              ox.unload();
             });
         }
       }
@@ -178,7 +179,12 @@ async function prod(ctx, next) {
       calc_order.unload();
       editor.unload();
       for(const ox of prod){
-        ox.unload();
+        try{
+          ox.unload();
+        }
+        catch(err) {
+          err = null;
+        }
       }      prod.length = 0;
     })
     .catch((err) => null);
