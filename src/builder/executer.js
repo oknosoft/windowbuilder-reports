@@ -120,7 +120,6 @@ async function prod(ctx, next) {
             })
             .then(() => {
               project.clear();
-              ox.unload();
             });
         }
       }
