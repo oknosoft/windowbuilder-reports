@@ -1,5 +1,5 @@
 /*!
- windowbuilder-reports v2.0.242, built:2018-12-06
+ windowbuilder-reports v2.0.242, built:2019-01-07
  © 2014-2018 Evgeniy Malyarov and the Oknosoft team http://www.oknosoft.ru
  To obtain commercial license and technical support, contact info@oknosoft.ru
  */
@@ -9,12 +9,12 @@
 
 function _interopDefault (ex) { return (ex && (typeof ex === 'object') && 'default' in ex) ? ex['default'] : ex; }
 
-var metaCore = _interopDefault(require('metadata-core'));
-var metaPouchdb = _interopDefault(require('metadata-pouchdb'));
-var paper = _interopDefault(require('paper/dist/paper-core'));
-var Router = _interopDefault(require('koa-better-router'));
 var Koa = _interopDefault(require('koa'));
 var cors = _interopDefault(require('@koa/cors'));
+var paper = _interopDefault(require('paper/dist/paper-core'));
+var metaCore = _interopDefault(require('metadata-core'));
+var metaPouchdb = _interopDefault(require('metadata-pouchdb'));
+var Router = _interopDefault(require('koa-better-router'));
 
 const debug = require('debug')('wb:meta');
 const MetaEngine = metaCore.plugin(metaPouchdb);
