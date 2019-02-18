@@ -21,6 +21,11 @@ module.exports = function (runtime) {
       log(`Worker received ${msg.event} event`);
       if(msg && msg.event == 'shutdown') runtime.cluster.worker.kill();
     });
+
+    process.on('unhandledRejection', error => {
+      // Will print "unhandledRejection err is not defined"
+      console.log('unhandledRejection', error.message);
+    });
   }
 
   // экземпляр Koa-приложения

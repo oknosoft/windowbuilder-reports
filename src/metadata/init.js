@@ -956,18 +956,23 @@ set params(v){this._setter_ts('params',v)}
 
     // создаём функцию из текста формулы
     if(!_data._formula && this.formula){
-      try{
-        if(this.async){
-          const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
-          _data._formula = (new AsyncFunction("obj,$p,attr", this.formula)).bind(this);
-        }
-        else{
-          _data._formula = (new Function("obj,$p,attr", this.formula)).bind(this);
-        }
-      }
-      catch(err){
+      if(this.parent == _manager.predefined("printing_plates") || this.formula.includes('pouch_complete_loaded')) {
         _data._formula = () => false;
-        $p.record_log(err);
+      }
+      else {
+        try{
+          if(this.async){
+            const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+            _data._formula = (new AsyncFunction("obj,$p,attr", this.formula)).bind(this);
+          }
+          else{
+            _data._formula = (new Function("obj,$p,attr", this.formula)).bind(this);
+          }
+        }
+        catch(err){
+          _data._formula = () => false;
+          $p.record_log(err);
+        }
       }
     }
 
