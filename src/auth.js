@@ -4,7 +4,7 @@ const fetch = require('node-fetch');
 const auth_cache = {};
 const couch_local = `${process.env.COUCHLOCAL.replace('/wb_', '')}/_session`;
 
-export default async (ctx, {cat}) => {
+module.exports = async (ctx, {cat}) => {
 
   // если указано ограничение по ip - проверяем
   // const {restrict_ips} = ctx.app;

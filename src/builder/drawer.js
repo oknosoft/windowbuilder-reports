@@ -1,13 +1,4 @@
-;(function(root, factory) {
-  if (typeof define === 'function' && define.amd) {
-    define([], factory);
-  } else if (typeof exports === 'object') {
-    module.exports = factory();
-  } else {
-    root.Drawer = factory();
-  }
-}(this, function() {
-
+module.exports = function({$p, paper}) {
 const consts = {
 
 	tune_paper(settings) {
@@ -1757,7 +1748,7 @@ class Contour extends AbstractFilling(paper.Layer) {
     }, (prow) => {
       const {param} = prow;
       const links = param.params_links({grid: {selection: {cnstr}}, obj: prow});
-      const hide = links.some((link) => link.hide);
+      const hide = param.is_calculated || links.some((link) => link.hide);
 
       if (links.length && param.linked_values(links, prow)) {
         notify = true;
@@ -2588,10 +2579,16 @@ class DimensionLine extends paper.Group {
           }
       });
       project.move_points(delta, false);
-      setTimeout(function () {
-        this.deselect_all_points(true);
-        this.register_update();
-      }.bind(project), 200);
+      if(project._attr._from_service) {
+        project.deselect_all_points(true);
+        project.register_update();
+      }
+      else {
+        setTimeout(function () {
+          this.deselect_all_points(true);
+          this.register_update();
+        }.bind(project), 200);
+      }
     }
 
   }
@@ -2690,15 +2687,15 @@ class DimensionLine extends paper.Group {
     if(align == $p.enm.text_aligns.left) {
       children.text.position = bs
         .add(path.getTangentAt(0).multiply(font_size))
-        .add(path.getNormalAt(0).multiply(font_size / (isNode ? 1.3 : 2)));
+        .add(path.getNormalAt(0).multiply(font_size / (isNode ? 1.9 : 2)));
     }
     else if(align == $p.enm.text_aligns.right) {
       children.text.position = es
         .add(path.getTangentAt(0).multiply(-font_size))
-        .add(path.getNormalAt(0).multiply(font_size / (isNode ? 1.3 : 2)));
+        .add(path.getNormalAt(0).multiply(font_size / (isNode ? 1.9 : 2)));
     }
     else {
-      children.text.position = bs.add(es).divide(2).add(path.getNormalAt(0).multiply(font_size / (isNode ? 1.3 : 2)));
+      children.text.position = bs.add(es).divide(2).add(path.getNormalAt(0).multiply(font_size / (isNode ? 1.9 : 2)));
       if(length < 20) {
         children.text.position = children.text.position.add(path.getTangentAt(0).multiply(font_size / 3));
       }
@@ -3719,8 +3716,6 @@ EditorInvisible.BuilderElement = BuilderElement;
 
 
 
-
-
 class Filling extends AbstractFilling(BuilderElement) {
 
   constructor(attr) {
@@ -3801,7 +3796,6 @@ class Filling extends AbstractFilling(BuilderElement) {
 
   }
 
-
   save_coordinates() {
 
     const {_row, project, profiles, bounds, imposts, nom} = this;
@@ -3878,7 +3872,6 @@ class Filling extends AbstractFilling(BuilderElement) {
     imposts.forEach((curr) => curr.save_coordinates());
   }
 
-
   create_leaf() {
 
     const {project} = this;
@@ -3899,11 +3892,9 @@ class Filling extends AbstractFilling(BuilderElement) {
     contour.activate();
   }
 
-
   cnn_side() {
     return $p.enm.cnn_sides.Изнутри;
   }
-
 
   nearest() {
     return null;
@@ -3941,7 +3932,6 @@ class Filling extends AbstractFilling(BuilderElement) {
     }
   }
 
-
   redraw() {
 
     this.sendToBack();
@@ -3969,7 +3959,7 @@ class Filling extends AbstractFilling(BuilderElement) {
     const {bounds} = path;
     _attr._text.content = this.formula();
 
-    const textBounds = bounds.scale(0.9);
+    const textBounds = bounds.scale(0.88);
     textBounds.width = textBounds.width > maxTextWidth ? maxTextWidth : textBounds.width;
     textBounds.height = textBounds.height > maxTextWidth ? maxTextWidth : textBounds.height;
 
@@ -3977,15 +3967,16 @@ class Filling extends AbstractFilling(BuilderElement) {
       const turn = textBounds.width * 1.5 < textBounds.height;
       if(turn){
         textBounds.width = elm_font_size;
+        _attr._text.rotation = 270;
       }
       else{
         textBounds.height = elm_font_size;
+        _attr._text.rotation = 0;
       }
       _attr._text.fitBounds(textBounds);
       _attr._text.point = turn
         ? bounds.bottomRight.add([-fontSize, -fontSize * 0.6])
         : bounds.bottomLeft.add([fontSize * 0.6, -fontSize]);
-      _attr._text.rotation = turn ? 270 : 0;
     }
     else{
       textBounds.height = elm_font_size;
@@ -4004,7 +3995,6 @@ class Filling extends AbstractFilling(BuilderElement) {
     }
   }
 
-
   draw_fragment() {
     const {l_dimensions, layer, path} = this;
     this.visible = true;
@@ -4017,7 +4007,6 @@ class Filling extends AbstractFilling(BuilderElement) {
     l_dimensions.redraw(true);
     layer.zoom_fit();
   }
-
 
   set_inset(v, ignore_select) {
 
@@ -4071,7 +4060,6 @@ class Filling extends AbstractFilling(BuilderElement) {
     super.set_inset(inset);
   }
 
-
   set_clr(v, ignore_select) {
     if(!ignore_select && this.project.selectedItems.length > 1){
       this.project.selected_glasses().forEach((elm) => {
@@ -4082,7 +4070,6 @@ class Filling extends AbstractFilling(BuilderElement) {
     }
     super.set_clr(v);
   }
-
 
   purge_paths() {
     const paths = this.children.filter((child) => child instanceof paper.Path);
@@ -4098,7 +4085,6 @@ class Filling extends AbstractFilling(BuilderElement) {
       destination: path.bounds.topRight
     });
   }
-
 
   formula(by_art) {
     let res;
@@ -4121,7 +4107,6 @@ class Filling extends AbstractFilling(BuilderElement) {
     return res || (by_art ? this.inset.article || this.inset.name : this.inset.name);
   }
 
-
   deselect_onlay_points() {
     for(const {generatrix} of this.imposts) {
       generatrix.segments.forEach((segm) => {
@@ -4135,7 +4120,6 @@ class Filling extends AbstractFilling(BuilderElement) {
     }
   }
 
-
   get imposts() {
     return this.getItems({class: Onlay});
   }
@@ -4144,7 +4128,6 @@ class Filling extends AbstractFilling(BuilderElement) {
     return this._attr._profiles || [];
   }
 
-
   remove_onlays() {
     for(let onlay of this.imposts){
       onlay.remove();
@@ -4152,21 +4135,17 @@ class Filling extends AbstractFilling(BuilderElement) {
   }
 
 
-
   get area() {
     return (this.bounds.area / 1e6).round(5);
   }
-
 
   get form_area() {
     return (this.path.area/1e6).round(5);
   }
 
-
   interiorPoint() {
     return this.path.interiorPoint;
   }
-
 
   get is_rectangular() {
     const {profiles, path} = this;
@@ -4176,7 +4155,6 @@ class Filling extends AbstractFilling(BuilderElement) {
   get generatrix() {
     return this.path;
   }
-
 
   get path() {
     return this._attr.path;
@@ -4298,11 +4276,9 @@ class Filling extends AbstractFilling(BuilderElement) {
     return res;
   }
 
-
   get outer_profiles() {
     return this.profiles;
   }
-
 
   get perimeter() {
     const res = [];
@@ -4324,7 +4300,6 @@ class Filling extends AbstractFilling(BuilderElement) {
     const {path} = this;
     return path ? path.bounds : new paper.Rectangle();
   }
-
 
   perimeter_inner(size = 0) {
     const {center} = this.bounds;
@@ -4363,7 +4338,6 @@ class Filling extends AbstractFilling(BuilderElement) {
     });
   }
 
-
   bounds_light(size = 0) {
     const path = new paper.Path({insert: false});
     for (const {sub_path} of this.perimeter_inner(size)) {
@@ -4376,32 +4350,26 @@ class Filling extends AbstractFilling(BuilderElement) {
     return path.bounds;
   }
 
-
   get x1() {
     return (this.bounds.left - this.project.bounds.x).round(1);
   }
-
 
   get x2() {
     return (this.bounds.right - this.project.bounds.x).round(1);
   }
 
-
   get y1() {
     return (this.project.bounds.height + this.project.bounds.y - this.bounds.bottom).round(1);
   }
-
 
   get y2() {
     return (this.project.bounds.height + this.project.bounds.y - this.bounds.top).round(1);
   }
 
-
   get info() {
     const {elm, bounds, thickness} = this;
     return "№" + elm + " w:" + bounds.width.toFixed(0) + " h:" + bounds.height.toFixed(0) + " z:" + thickness.toFixed(0);
   }
-
 
   get oxml() {
     const oxml = {
@@ -6615,9 +6583,6 @@ class ProfileItem extends GeneratrixElement {
       _row.r = min_radius + 0.0001;
       full = true;
     }
-    if(height && height > min_radius) {
-      height = min_radius;
-    }
 
     if(selected) {
       this.selected = false;
@@ -6631,7 +6596,7 @@ class ProfileItem extends GeneratrixElement {
       if(full || height) {
         const start = b.add(e).divide(2);
         const vector = p.subtract(start);
-        vector.normalize(height || min_radius);
+        vector.length = (height || min_radius);
         p = start.add(vector);
       }
       generatrix.arcTo(p, e);
@@ -8696,6 +8661,11 @@ class Scheme extends paper.Project {
     }
 
     _attr._loading = true;
+
+    if(from_service) {
+      _attr._from_service = true;
+    }
+
     this.ox = null;
     this.clear();
 
@@ -8835,7 +8805,7 @@ class Scheme extends paper.Project {
 
   clear() {
     const {_attr} = this;
-    const pnames = '_bounds,_update_timer,_loading,_snapshot,_silent';
+    const pnames = '_bounds,_update_timer,_loading,_snapshot,_silent,_from_service';
     for (let fld in _attr) {
       if(!pnames.match(fld)) {
         delete _attr[fld];
@@ -8939,10 +8909,8 @@ class Scheme extends paper.Project {
     if(other.length && Math.abs(delta.x) > 1) {
       this.do_align(auto_align, profiles);
     }
-    else {
-      setTimeout(() => {
-        this.contours.forEach(l => l.redraw());
-      }, 100);
+    else if(!this._attr._from_service) {
+      setTimeout(() => this.contours.forEach(l => l.redraw()), 70);
     }
 
     _dp._manager.emit_async('update', {}, {x1: true, x2: true, y1: true, y2: true, a1: true, a2: true, cnn1: true, cnn2: true, info: true});
@@ -9009,10 +8977,13 @@ class Scheme extends paper.Project {
     }
   }
 
-  get_svg(attr) {
+  get_svg(attr = {}) {
     this.deselectAll();
-
-    const svg = this.exportSVG();
+    const options = attr.export_options || {};
+    if(!options.precision) {
+      options.precision = 1;
+    }
+    const svg = this.exportSVG(options);
     const bounds = this.strokeBounds.unite(this.l_dimensions.strokeBounds);
 
     svg.setAttribute('x', bounds.x);
@@ -11705,6 +11676,7 @@ $p.spec_building = new SpecBuilding($p);
 })($p);
 
 
+
 $p.md.once('predefined_elmnts_inited', () => {
   const _mgr = $p.cat.characteristics;
 
@@ -11751,6 +11723,7 @@ $p.CatCharacteristics = class CatCharacteristics extends $p.CatCharacteristics {
 
   }
 
+
   add_inset_params(inset, cnstr, blank_inset) {
     const ts_params = this.params;
     const params = [];
@@ -11776,6 +11749,7 @@ $p.CatCharacteristics = class CatCharacteristics extends $p.CatCharacteristics {
       row.hide = links.some((link) => link.hide);
     });
   }
+
 
   prod_name(short) {
     const {calc_order_row, calc_order, leading_product, sys, clr, origin} = this;
@@ -11862,6 +11836,7 @@ $p.CatCharacteristics = class CatCharacteristics extends $p.CatCharacteristics {
     return name;
   }
 
+
   open_origin(row_id) {
     try {
       let {origin} = this.specification.get(row_id);
@@ -11881,6 +11856,7 @@ $p.CatCharacteristics = class CatCharacteristics extends $p.CatCharacteristics {
       $p.record_log(err);
     }
   }
+
 
   find_create_cx(elm, origin) {
     const {_manager, calc_order, params, inserts} = this;
@@ -11914,6 +11890,7 @@ $p.CatCharacteristics = class CatCharacteristics extends $p.CatCharacteristics {
     return cx;
   }
 
+
   get calc_order_row() {
     let _calc_order_row;
     this.calc_order.production.find_rows({characteristic: this}, (_row) => {
@@ -11922,6 +11899,7 @@ $p.CatCharacteristics = class CatCharacteristics extends $p.CatCharacteristics {
     });
     return _calc_order_row;
   }
+
 
   get prod_nom() {
     if(!this.sys.empty()) {
@@ -11964,6 +11942,7 @@ $p.CatCharacteristics = class CatCharacteristics extends $p.CatCharacteristics {
 
     return this.owner;
   }
+
 
   get builder_props() {
     const defaults = this.constructor.builder_props_defaults;
@@ -12013,6 +11992,7 @@ $p.CatCharacteristics = class CatCharacteristics extends $p.CatCharacteristics {
     }
   }
 
+
   recalc(attr = {}, editor) {
 
 
@@ -12024,7 +12004,7 @@ $p.CatCharacteristics = class CatCharacteristics extends $p.CatCharacteristics {
     return project.load(this, true)
       .then(() => {
 
-        project.save_coordinates({save: true, svg: false});
+        project.save_coordinates(Object.assign({save: true, svg: false}, attr));
 
       })
       .then(() => {
@@ -12039,6 +12019,7 @@ $p.CatCharacteristics = class CatCharacteristics extends $p.CatCharacteristics {
       });
 
   }
+
 
   draw(attr = {}, editor) {
 
@@ -12721,47 +12702,6 @@ $p.cat.contracts.__define({
 
 });
 
-
-
-
-
-Object.defineProperties($p.cat.divisions, {
-  get_option_list: {
-    value(selection, val) {
-      const list = [];
-      $p.current_user.acl_objs.find_rows({type: "cat.divisions"}, ({acl_obj}) => {
-        if(acl_obj && list.indexOf(acl_obj) == -1){
-          list.push(acl_obj);
-          acl_obj._children().forEach((o) => list.indexOf(o) == -1 && list.push(o));
-        }
-      });
-      if(!list.length){
-        return this.constructor.prototype.get_option_list.call(this, selection, val);
-      }
-
-      function check(v){
-        if($p.utils.is_equal(v.value, val))
-          v.selected = true;
-        return v;
-      }
-
-      const l = [];
-      $p.utils._find_rows.call(this, list, selection, (v) => l.push(check({text: v.presentation, value: v.ref})));
-
-      l.sort(function(a, b) {
-        if (a.text < b.text){
-          return -1;
-        }
-        else if (a.text > b.text){
-          return 1;
-        }
-        return 0;
-      })
-      return Promise.resolve(l);
-    },
-    writable: true
-  }
-});
 
 
 $p.CatElm_visualization.prototype.__define({
@@ -15190,16 +15130,15 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
     let res = Promise.resolve();
     const ax = [];
 
-    for (let i = 0; i < dp.production.count(); i++) {
-      const row_spec = dp.production.get(i);
+    dp.production.forEach((row_dp) => {
       let row_prod;
 
-      if(row_spec.inset.empty()) {
-        row_prod = this.production.add(row_spec);
+      if(row_dp.inset.empty()) {
+        row_prod = this.production.add(row_dp);
         row_prod.unit = row_prod.nom.storage_unit;
-        if(!row_spec.clr.empty()) {
-          $p.cat.characteristics.find_rows({owner: row_spec.nom}, (ox) => {
-            if(ox.clr == row_spec.clr) {
+        if(!row_dp.clr.empty()) {
+          $p.cat.characteristics.find_rows({owner: row_dp.nom}, (ox) => {
+            if(ox.clr == row_dp.clr) {
               row_prod.characteristic = ox;
               return false;
             }
@@ -15208,13 +15147,14 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
         res = res.then(() => row_prod);
       }
       else {
-        const len_angl = new $p.DocCalc_order.FakeLenAngl(row_spec);
-        const elm = new $p.DocCalc_order.FakeElm(row_spec);
+        const len_angl = new $p.DocCalc_order.FakeLenAngl(row_dp);
+        const elm = new $p.DocCalc_order.FakeElm(row_dp);
         res = res
-          .then(() => this.create_product_row({row_spec, elm, len_angl, params: dp.product_params, create: true}))
+          .then(() => this.create_product_row({row_spec: row_dp, elm, len_angl, params: dp.product_params, create: true}))
           .then((row_prod) => {
-            row_spec.inset.calculate_spec({elm, len_angl, ox: row_prod.characteristic});
+            row_dp.inset.calculate_spec({elm, len_angl, ox: row_prod.characteristic});
             row_prod.characteristic.specification.group_by('nom,clr,characteristic,len,width,s,elm,alp1,alp2,origin,dop', 'qty,totqty,totqty1');
+            row_dp.characteristic = row_prod.characteristic;
             return row_prod;
           });
       }
@@ -15227,8 +15167,7 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
         }, true))
           .then((tx) => [].push.apply(ax, tx));
       });
-
-    }
+    });
 
     return res.then(() => ax);
   }
@@ -15571,6 +15510,6 @@ $p.DocCalc_orderProductionRow.rfields = {
 };
 
 $p.DocCalc_orderProductionRow.pfields = 'price_internal,quantity,discount_percent_internal';
-
+ 
 return EditorInvisible;
-}));
+}

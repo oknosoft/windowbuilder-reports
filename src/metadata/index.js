@@ -1,31 +1,28 @@
 
-const debug = require('debug')('wb:meta');
-
 // конструктор MetaEngine
-import metaCore from 'metadata-core';
-import metaPouchdb from 'metadata-pouchdb';
-const MetaEngine = metaCore.plugin(metaPouchdb);
+const MetaEngine = require('metadata-core')
+  .plugin(require('metadata-pouchdb'));
 
 // функция установки параметров сеанса
-const settings = require('./config/report.settings');
+const settings = require('../../config/app.settings');
 
 // функция инициализации структуры метаданных
-const meta_init = require('./src/metadata/init.js');
+const meta_init = require('./init.js');
 
-debug('required');
+module.exports = function (runtime) {
 
-// создаём контекст MetaEngine
-const $p = global.$p = new MetaEngine();
-debug('created');
+  // Logger
+  const log = require('../logger')(runtime);
 
-// параметры сеанса инициализируем сразу
-$p.wsql.init(settings);
+  // создаём контекст MetaEngine
+  const $p = new MetaEngine();
+  log('created MetaEngine');
 
-// инициализируем параметры сеанса и метаданные
-(async () => {
+  // параметры сеанса инициализируем сразу
+  $p.wsql.init(settings);
 
   // реквизиты подключения к couchdb
-  const {user_node} = settings();
+  const {user_node, server} = settings();
 
   // выполняем скрипт инициализации метаданных
   meta_init($p);
@@ -37,27 +34,24 @@ $p.wsql.init(settings);
   // // подключим модификаторы
   // modifiers($p);
 
-  // загружаем кешируемые справочники в ram и начинаем следить за изменениями ram
-  pouch.log_in(user_node.username, user_node.password)
-    .then(() => pouch.load_data())
-    .catch((err) => debug(err));
-
+  // подключаем обработчики событий адаптера данных
   pouch.on({
     user_log_in(name) {
-      debug(`logged in ${$p.job_prm.couch_local}, user:${name}, zone:${$p.job_prm.zone}`);
+      log(`logged in ${job_prm.couch_local}, user:${name}, zone:${job_prm.zone}`);
+      wsql.set_user_param('user_name', job_prm.current_user);
     },
     user_log_fault(err) {
-      debug(`login error ${err}`);
+      log(`login error ${err}`);
     },
     pouch_load_start(page) {
-      debug('loadind to ram: start');
+      log('loadind to ram: start');
     },
     pouch_data_page(page) {
-      debug(`loadind to ram: page №${page.page} (${page.page * page.limit} from ${page.total_rows})`);
+      log(`loadind to ram: page №${page.page} (${page.page * page.limit} from ${page.total_rows})`);
     },
     pouch_complete_loaded(page) {
       job_prm.complete_loaded = true;
-      debug(`ready to receive queries, listen on port: ${process.env.PORT || 3030}`);
+      log(`ready to receive queries, listen on port: ${server.port}`);
     },
     pouch_doc_ram_loaded() {
       pouch.local.ram.changes({
@@ -66,21 +60,20 @@ $p.wsql.init(settings);
         include_docs: true,
       })
         .on('change', (change) => {
-        // формируем новый
-        pouch.load_changes({docs: [change.doc]});
-      })
+          // формируем новый
+          pouch.load_changes({docs: [change.doc]});
+        })
         .on('error', (err) => {
-        debug(`change error ${err}`);
-      });
-      debug(`loadind to ram: READY`);
-
+          log(`change error ${err}`);
+        });
+      log(`loadind to ram: READY`);
     },
   });
 
-})();
+  // загружаем кешируемые справочники в ram и начинаем следить за изменениями ram
+  pouch
+    .log_in(user_node.username, user_node.password)
+    .then(() => pouch.load_data());
 
-export default $p;
-
-
-
-
+  return $p;
+}
