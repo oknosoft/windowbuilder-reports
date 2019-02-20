@@ -27,6 +27,7 @@ module.exports = function($p) {
             glass.visible = false;
           }
         });
+        project.ox = null;
       }
     }
   }
