@@ -1,5 +1,6 @@
 const url = require('url');
 const qs = require('qs');
+const auth = require('../auth');
 
 module.exports = function($p) {
 
@@ -241,15 +242,6 @@ module.exports = function($p) {
 
   return async (ctx, next) => {
 
-    // если указано ограничение по ip - проверяем
-    const {restrict_ips} = ctx.app;
-    const ip = ctx.req.headers['x-real-ip'] || ctx.ip;
-    if(restrict_ips.length && restrict_ips.indexOf(ip) == -1){
-      ctx.status = 403;
-      ctx.body = 'ip restricted: ' + ip;
-      return;
-    }
-
     // контролируем загруженность справочников
     if(!$p.job_prm.complete_loaded) {
       ctx.status = 403;
@@ -257,15 +249,13 @@ module.exports = function($p) {
       return;
     }
 
-    // проверяем авторизацию
-    // let {authorization, suffix} = ctx.req.headers;
-    // if(!authorization || !suffix){
-    //   ctx.status = 403;
-    //   ctx.body = 'access denied';
-    //   return;
-    // }
+    // проверяем ограничение по ip и авторизацию
+    await auth(ctx, $p)
+      .catch(() => null);
 
-    //console.log(ctx.params);
+    if(!ctx._auth) {
+      return;
+    }
 
     try{
       switch (ctx.params.class){

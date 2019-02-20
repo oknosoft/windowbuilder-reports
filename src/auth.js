@@ -1,8 +1,8 @@
 
-const fetch = require('node-fetch');
-
 const auth_cache = {};
 const couch_local = `${process.env.COUCHLOCAL.replace('/wb_', '')}/_session`;
+const http = couch_local.startsWith('https') ? require('https') : require('http');
+const { URL } = require('url');
 
 module.exports = async (ctx, {cat}) => {
 
@@ -23,8 +23,7 @@ module.exports = async (ctx, {cat}) => {
     return;
   }
 
-  const _auth = {'username': '', roles: []};
-
+  const _auth = {username: '', roles: [], suffix: ''};
 
   const resp = await new Promise((resolve, reject) => {
 
@@ -40,11 +39,27 @@ module.exports = async (ctx, {cat}) => {
       Object.assign(_auth, cached);
       return resolve(cached.auth);
     }
-
-    fetch(couch_local, {headers: ctx.req.headers})
-      .then((res) => {
-        return res.json();
+    const url = new URL(couch_local);
+    const options = {
+      hostname: url.hostname,
+      protocol: url.protocol,
+      path: url.pathname,
+      headers: {accept: 'application/json', 'content-type': 'application/json', authorization: ctx.req.headers.authorization},
+      rejectUnauthorized: false
+    };
+    if(url.port) {
+      options.port = url.port;
+    }
+    new Promise((resolve, reject) => {
+      http.get(options, function (result) {
+        let data = "";
+        result.on('data', (chunk) => data += chunk);
+        result.on("end", function () {
+          resolve(JSON.parse(data));
+        });
+        result.on("error", reject);
       })
+    })
       .then(({ok, userCtx}) => {
         if(!ok) {
           return set_cache(auth_str, false);
@@ -69,7 +84,7 @@ module.exports = async (ctx, {cat}) => {
           _auth.suffix = '0' + _auth.suffix;
         }
         if(!_auth.branch) {
-          _auth.branch = _auth.user.branch;
+          _auth.branch = _auth.user ? _auth.user.branch : cat.branches.get();
         }
         return _auth.branch.is_new() && !_auth.branch.empty() && _auth.branch.load();
       })
