@@ -6,6 +6,8 @@
  */
 module.exports = function settings(prm) {
 
+  const {env} = process;
+
   return Object.assign(prm || {}, {
 
     // разделитель для localStorage
@@ -15,7 +17,7 @@ module.exports = function settings(prm) {
     guests: [],
 
     // расположение couchdb для nodejs
-    couch_local: process.env.COUCHLOCAL || "http://cou221:5984/wb_",
+    couch_local: env.COUCHLOCAL || "http://cou221:5984/wb_",
 
     pouch_filter: {
       meta: "auth/meta"
@@ -23,8 +25,8 @@ module.exports = function settings(prm) {
 
     // авторизация couchdb
     user_node: {
-      username: process.env.DBUSER || 'admin',
-      password: process.env.DBPWD || 'admin'
+      username: env.DBUSER || 'admin',
+      password: env.DBPWD || 'admin'
     },
 
     couch_direct: true,
@@ -35,12 +37,12 @@ module.exports = function settings(prm) {
     },
 
     // по умолчанию, обращаемся к зоне 21
-    zone: process.env.ZONE || 21,
+    zone: env.ZONE || 21,
 
     server: {
-      prefix: '/r',                   // Mount path, no trailing slash
-      port: process.env.PORT || 3030, // Port
-      maxpost: 40 * 1024 * 1024,      // Max size of POST request
+      prefix: '/r',               // Mount path, no trailing slash
+      port: env.PORT || 3030,     // Port
+      maxpost: 40 * 1024 * 1024,  // Max size of POST request
 
       rater: {                    // Request rate locker
         all: {                    // Total requests limit
@@ -55,7 +57,7 @@ module.exports = function settings(prm) {
     },
 
     workers: {
-      count: 1,                 // Total threads
+      count: env.WORKERS_COUNT ? parseFloat(env.WORKERS_COUNT) : 1,  // Total threads
       reloadAt: 3,              // Hour all threads are restarted
       reloadOverlap: 40e3,      // Gap between restarts of simultaneous threads
       killDelay: 10e3           // Delay between shutdown msg to worker and kill, ms
