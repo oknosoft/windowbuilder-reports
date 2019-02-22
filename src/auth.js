@@ -52,13 +52,11 @@ module.exports = async (ctx, {cat}) => {
     }
     new Promise((resolve, reject) => {
       http.get(options, function (result) {
-        let data = "";
+        let data = '';
         result.on('data', (chunk) => data += chunk);
-        result.on("end", function () {
-          resolve(JSON.parse(data));
-        });
-        result.on("error", reject);
-      })
+        result.on('end', () => resolve(JSON.parse(data)));
+        result.on('error', reject);
+      });
     })
       .then(({ok, userCtx}) => {
         if(!ok) {
