@@ -1,3 +1,11 @@
+/**
+ * Рабочий процесс кластера
+ *
+ * @module worker
+ *
+ * Created by Evgeniy Malyarov on 05.02.2019.
+ */
+
 'use strict';
 
 // Koa http server
@@ -22,16 +30,16 @@ module.exports = function (runtime) {
       if(msg && msg.event == 'shutdown') runtime.cluster.worker.kill();
     });
 
-    process.on('unhandledRejection', error => {
-      // Will print "unhandledRejection err is not defined"
-      console.log('unhandledRejection', error.message);
-    });
+    // process.on('unhandledRejection', error => {
+    //   // Will print "unhandledRejection err is not defined"
+    //   console.error('unhandledRejection', error.message);
+    // });
   }
 
   // экземпляр Koa-приложения
   const app = new Koa();
 
-  // Register the cors as Koa middleware
+  // добавляем заголовки cors
   app.use(cors({credentials: true, maxAge: 600}));
 
   // Register the router as Koa middleware

@@ -11,22 +11,22 @@ module.exports = function settings(prm) {
   return Object.assign(prm || {}, {
 
     // разделитель для localStorage
-    local_storage_prefix: "wb_",
+    local_storage_prefix: 'wb_',
 
     // гостевые пользователи для демо-режима
     guests: [],
 
     // расположение couchdb для nodejs
-    couch_local: env.COUCHLOCAL || "http://cou221:5984/wb_",
+    couch_local: env.COUCHLOCAL || 'http://cou221:5984/wb_',
 
     pouch_filter: {
-      meta: "auth/meta"
+      meta: 'auth/meta'
     },
 
     // авторизация couchdb
     user_node: {
       username: env.DBUSER || 'admin',
-      password: env.DBPWD || 'admin'
+      password: env.DBPWD || 'admin',
     },
 
     couch_direct: true,
@@ -46,7 +46,7 @@ module.exports = function settings(prm) {
 
       rater: {                    // Request rate locker
         all: {                    // Total requests limit
-          interval: 2,            // Seconds, collect interval
+          interval: 3,            // Seconds, collect interval
           limit: 300              // Max requests per interval
         },
         ip: {                     // Per-ip requests limit

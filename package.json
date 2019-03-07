@@ -21,9 +21,9 @@
     "canvas": "^1.6.13",
     "koa": "^2.7.0",
     "koa-better-router": "^2.1",
-    "metadata-abstract-ui": "2.0.18-beta.3",
-    "metadata-core": "2.0.18-beta.3",
-    "metadata-pouchdb": "2.0.18-beta.3",
+    "metadata-abstract-ui": "2.0.18-beta.4",
+    "metadata-core": "2.0.18-beta.4",
+    "metadata-pouchdb": "2.0.18-beta.4",
     "node-fetch": "^2.3.0",
     "paper-jsdom-canvas": "^0.12"
   },

@@ -38,7 +38,7 @@ module.exports = function($p) {
       }
 
       // извлекаем значения полей фильтра из селектора
-      let dfrom, dtill, from, till, search, department, state;
+      let dfrom, dtill, from, till, search, conditions = [];
       for(const row of selector.$and) {
         const fld = Object.keys(row)[0];
         const cond = Object.keys(row[fld])[0];
@@ -55,11 +55,8 @@ module.exports = function($p) {
         else if(fld === 'search') {
           search = row[fld][cond] ? row[fld][cond].toLowerCase().split(' ') : [];
         }
-        else if(fld === 'department') {
-          department = cond ? row[fld][cond] : row[fld];
-        }
-        else if(fld === 'state') {
-          state = cond ? row[fld][cond] : row[fld];
+        else if(fields.includes(fld)) {
+          conditions.push(RamIndexer.truth(fld, row[fld]));
         }
       }
 
@@ -115,6 +112,13 @@ module.exports = function($p) {
         // фильтруем по подразделению acl
         if(doc.department && divisions.length && !divisions.includes(doc.department)) {
           return;
+        }
+
+        // фильтруем по полям селектора
+        for(const fn of conditions) {
+          if(!fn(doc)) {
+            return;
+          }
         }
 
         // фильтруем по строке

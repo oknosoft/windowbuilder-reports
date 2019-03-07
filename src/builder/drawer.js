@@ -1748,7 +1748,15 @@ class Contour extends AbstractFilling(paper.Layer) {
     }, (prow) => {
       const {param} = prow;
       const links = param.params_links({grid: {selection: {cnstr}}, obj: prow});
-      const hide = param.is_calculated || links.some((link) => link.hide);
+      let hide = !param.show_calculated && param.is_calculated;
+      if(!hide){
+        if(links.length) {
+          hide = links.some((link) => link.hide);
+        }
+        else {
+          hide = prow.hide;
+        }
+      };
 
       if (links.length && param.linked_values(links, prow)) {
         notify = true;
@@ -5096,15 +5104,20 @@ class Magnetism {
 
     for(const profile of selected.profiles) {
       if(profile !== selected.profile) {
+        let pushed;
         if(profile.b.is_nearest(point, true)) {
           nodes.push({profile, point: 'b'});
+          pushed = true;
         }
         if(profile.e.is_nearest(point, true)) {
           nodes.push({profile, point: 'e'});
+          pushed = true;
         }
-        const px = (profile.nearest(true) ? profile.rays.outer : profile.generatrix).getNearestPoint(point);
-        if(px.is_nearest(point, true)) {
-          nodes.push({profile, point: 't'});
+        if(!pushed) {
+          const px = (profile.nearest(true) ? profile.rays.outer : profile.generatrix).getNearestPoint(point);
+          if(px.is_nearest(point, true)) {
+            nodes.push({profile, point: 't'});
+          }
         }
       }
     }
@@ -8387,7 +8400,7 @@ class Scheme extends paper.Project {
 
   _dp_listener(obj, fields) {
 
-    const {_attr, ox, _scope} = this;
+    const {_attr, ox} = this;
 
     if(_attr._loading || _attr._snapshot || obj != this._dp) {
       return;
@@ -8413,7 +8426,7 @@ class Scheme extends paper.Project {
 
       obj.sys.refill_prm(ox, 0, true);
 
-      _scope.eve.emit_async('rows', ox, {extra_fields: true, params: true});
+      obj._manager.emit_async('rows', obj, {extra_fields: true});
 
       for (const contour of this.contours) {
         contour.on_sys_changed();
@@ -8939,7 +8952,7 @@ class Scheme extends paper.Project {
 
     this.l_connective.save_coordinates();
 
-    $p.products_building.recalc(this, attr);
+    return $p.products_building.recalc(this, attr);
 
   }
 
@@ -10005,11 +10018,6 @@ class Pricing {
       const value = prices[ref];
 
       if (!onom || !onom._data){
-        $p.record_log({
-          class: 'error',
-          note,
-          obj: {nom: ref, value}
-        });
         continue;
       }
       onom._data._price = value;
@@ -10027,6 +10035,12 @@ class Pricing {
   sync_local(pouch, step = 0) {
     return pouch.remote.templates.get(`_local/price_${step}`)
       .then((remote) => {
+
+        if(pouch.remote.templates === pouch.local.templates) {
+          this.build_cache_local(remote);
+          return this.sync_local(pouch, ++step);
+        }
+
         return pouch.local.templates.get(`_local/price_${step}`)
           .catch(() => ({}))
           .then((local) => {
@@ -10043,28 +10057,29 @@ class Pricing {
             }
 
             this.build_cache_local(remote);
-
             return this.sync_local(pouch, ++step);
           })
       })
       .catch((err) => {
         if(step !== 0) {
-          pouch.local.templates.get(`_local/price_${step}`)
-            .then((local) => pouch.local.templates.remove(local))
-            .catch(() => null);
+          if(pouch.remote.templates !== pouch.local.templates) {
+            pouch.local.templates.get(`_local/price_${step}`)
+              .then((local) => pouch.local.templates.remove(local))
+              .catch(() => null);
+          }
           return true;
         }
       });
   }
 
   by_local(step = 0) {
-    const {pouch} = $p.adapters;
+    const {adapters: {pouch}, job_prm} = $p;
 
     if(!pouch.local.templates) {
       return Promise.resolve(false);
     }
 
-    const pre = step === 0 && pouch.local.templates.adapter !== 'http' && pouch.authorized ?
+    const pre = step === 0 && (pouch.local.templates.adapter !== 'http' || (job_prm.user_node && job_prm.user_node.templates)) && pouch.authorized ?
       pouch.remote.templates.info()
         .then(() => this.sync_local(pouch))
         .catch((err) => null)
@@ -11120,6 +11135,11 @@ class ProductsBuilding {
         scheme.notify(scheme, 'scheme_snapshot', attr);
       }
 
+      function finish() {
+        delete scheme._attr._saving;
+        ox._data._loading = false;
+      }
+
       if(attr.save) {
 
 
@@ -11127,15 +11147,16 @@ class ProductsBuilding {
           ox.svg = scheme.get_svg();
         }
 
-        ox.save().then(() => {
+        return ox.save().then(() => {
           attr.svg !== false && $p.msg.show_msg([ox.name, 'Спецификация рассчитана']);
-          delete scheme._attr._saving;
+          finish();
+
           ox.calc_order.characteristic_saved(scheme, attr);
           scheme._scope && scheme._scope.eve.emit('characteristic_saved', scheme, attr);
 
         })
           .then(() => {
-            if(scheme._scope || attr.close) {
+            if(!scheme._attr._from_service && (scheme._scope || attr.close)) {
               return new Promise((resolve, reject) => {
                 setTimeout(() => ox.calc_order._modified && ox.calc_order.save()
                   .then(resolve)
@@ -11146,7 +11167,7 @@ class ProductsBuilding {
           .catch((err) => {
 
 
-            delete scheme._attr._saving;
+            finish();
 
             if(err.msg && err.msg._shown) {
               return;
@@ -11168,10 +11189,8 @@ class ProductsBuilding {
           });
       }
       else {
-        delete scheme._attr._saving;
+        return Promise.resolve(finish());
       }
-
-      ox._data._loading = false;
 
     };
 
@@ -15260,7 +15279,7 @@ $p.DocCalc_order = class DocCalc_order extends $p.DocCalc_order {
       this.department = department;
     }
     const {current_user, cat} = $p;
-    if(this.department.empty() || this.department.is_new()) {
+    if(current_user && this.department.empty() || this.department.is_new()) {
       current_user.acl_objs && current_user.acl_objs.find_rows({by_default: true, type: cat.divisions.class_name}, (row) => {
         if(this.department != row.acl_obj) {
           this.department = row.acl_obj;
@@ -15510,6 +15529,134 @@ $p.DocCalc_orderProductionRow.rfields = {
 };
 
 $p.DocCalc_orderProductionRow.pfields = 'price_internal,quantity,discount_percent_internal';
+
+
+(({adapters: {pouch}, classes, cat, doc, job_prm, md, pricing, utils}) => {
+
+  const _mgr = doc.calc_order;
+  const proto_get = _mgr.constructor.prototype.get;
+
+  function template_get(ref, do_not_create){
+    return proto_get.apply(this, arguments)
+  }
+
+  function from_files(start) {
+    return start ? pouch.from_files(pouch.local.templates, pouch.remote.templates) : Promise.resolve();
+  }
+
+  function refresh_doc(start) {
+    if(pouch.local.templates && pouch.remote.templates) {
+      return from_files(start)
+        .then((rres) => {
+          return pouch.local.templates.replicate.from(pouch.remote.templates,
+            {
+              batch_size: 300,
+              batches_limit: 3,
+            })
+            .on('change', (info) => {
+              info.db = 'templates';
+              pouch.emit_async('repl_state', info);
+              if(!start && info.ok) {
+                for(const {doc} of info.docs) {
+                  if(doc.class_name === 'doc.nom_prices_setup') {
+                    setTimeout(pricing.by_doc.bind(pricing, doc), 1000);
+                  }
+                }
+              }
+            })
+            .then((info) => {
+              info.db = 'templates';
+              pouch.emit_async('repl_state', info);
+              return rres;
+            })
+            .catch((err) => {
+              err.result.db = 'templates';
+              pouch.emit_async('repl_state', err.result);
+              $p.record_log(err);
+            });
+        });
+    }
+    else {
+      return Promise.resolve();
+    }
+  }
+
+  function patch_cachable() {
+    const names = [
+      "cat.parameters_keys",
+      "cat.stores",
+      "cat.delivery_directions",
+      "cat.cash_flow_articles",
+      "cat.nonstandard_attributes",
+      "cat.projects",
+      "cat.nom_prices_types",
+      "doc.nom_prices_setup"
+    ];
+    for(const name of names) {
+      const meta = md.get(name);
+      meta.cachable = meta.cachable.replace(/^doc/, 'templates');
+    }
+  }
+
+  function direct_templates() {
+    if(!pouch.props._suffix || !job_prm.templates) {
+      !pouch.local.templates && pouch.local.__define('templates', {
+        get() {
+          return pouch.remote.doc;
+        },
+        configurable: true,
+        enumerable: false
+      });
+    }
+    return Promise.resolve();
+  }
+
+  function on_log_in() {
+
+    if(!pouch.props._suffix || !job_prm.templates) {
+      return direct_templates();
+    }
+    else {
+      patch_cachable();
+    }
+
+    const {__opts} = pouch.remote.ram;
+    pouch.remote.templates = new classes.PouchDB(__opts.name.replace(/ram$/, 'templates'),
+      {skip_setup: true, adapter: 'http', auth: __opts.auth});
+
+
+
+    if(pouch.props.direct) {
+      !pouch.local.templates && pouch.local.__define('templates', {
+        get() {
+          return pouch.remote.templates;
+        },
+        configurable: true,
+        enumerable: false
+      });
+    }
+    else {
+      pouch.local.templates = new classes.PouchDB('templates', {adapter: 'idb', auto_compaction: true, revs_limit: 3});
+      setInterval(refresh_doc, 600000);
+      return refresh_doc(true)
+        .then((rres) => {
+          return typeof rres === 'number' && pouch.rebuild_indexes('templates');
+        });
+    }
+
+  }
+
+  function user_log_out() {
+    if(pouch.local.templates && !pouch.local.hasOwnProperty('templates')) {
+      delete pouch.local.templates;
+    }
+  }
+
+  pouch.on({on_log_in, user_log_out});
+
+  pouch.once('pouch_doc_ram_loaded', direct_templates);
+
+})($p);
  
 return EditorInvisible;
 }
