@@ -2,7 +2,7 @@
 
 module.exports = function (runtime) {
 
-  const {executer, $p} = require('./builder')(runtime);
+  const {executer, $p} = require('./windowbuilder')(runtime);
   const search  = require('./search')($p, runtime);
 
   const Router = require('koa-better-router');
