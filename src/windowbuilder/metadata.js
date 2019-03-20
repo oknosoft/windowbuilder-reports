@@ -1,7 +1,8 @@
 
 // конструктор MetaEngine
 const MetaEngine = require('metadata-core')
-  .plugin(require('metadata-pouchdb'));
+  .plugin(require('metadata-pouchdb'))
+  .plugin(require('../accumulation'));
 
 // функция установки параметров сеанса
 const settings = require('../../config/app.settings');
@@ -66,6 +67,9 @@ module.exports = function (runtime) {
         .on('error', (err) => {
           log(`change error ${err}`);
         });
+
+      require('./accumulation')($p);
+
       log(`loadind to ram: READY`);
     },
   });

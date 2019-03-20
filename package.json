@@ -25,7 +25,8 @@
     "metadata-core": "2.0.18-beta.4",
     "metadata-pouchdb": "2.0.18-beta.4",
     "node-fetch": "^2.3.0",
-    "paper-jsdom-canvas": "^0.12"
+    "paper-jsdom-canvas": "^0.12",
+    "pg": "^7.9.0"
   },
   "devDependencies": {
     "md5-file": "^4.0"
