@@ -81,7 +81,17 @@ module.exports = function($p) {
           res[ref] = {
             constructions: _obj.constructions || [],
             coordinates: _obj.coordinates || [],
-            specification: _obj.specification ? _obj.specification.map((o) => Object.assign(o, {article: nom.get(o.nom).article})) : [],
+            specification: _obj.specification ? _obj.specification.map((o) => {
+              const {_row} = o;
+              const dop = {article: _row.nom.article};
+              if(!_row.origin.empty()) {
+                dop.origin_name = _row.origin.name;
+              }
+              if(!_row.specify.empty()) {
+                dop.specify_name = _row.specify.name;
+              }
+              return Object.assign(o, dop);
+            }) : [],
             glasses: _obj.glasses,
             params: _obj.params,
             clr: _obj.clr,
