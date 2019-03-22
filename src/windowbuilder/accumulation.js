@@ -12,7 +12,10 @@ module.exports = function accumulation({adapters, accumulation}) {
       adapters.pouch.remote.doc,
     ],
     listeners: [
-      require('./calc_order_calculations'),
+      require('./calc_order_calculations'),                       // заказы
+      require('./calculations_credit')('doc.debit_cash_order'),   // касса приход
+      require('./calculations_credit')('doc.credit_card_order'),  // оплата картой
+      require('./calculations_credit')('doc.debit_bank_order'),   // банк приход
     ]
   });
 };

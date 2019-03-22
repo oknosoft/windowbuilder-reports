@@ -118,10 +118,10 @@ class Accumulation extends classes.MetaEventEmitter {
     clearTimeout(this.timer);
     const changes = this.changes.bind(this);
     return Promise.all(this.dbs.map(changes))
+      .catch((err) => this.emit('error', err))
       .then(() => {
         this.timer = setTimeout(this.execute.bind(this), this.interval);
-      })
-      .catch((err) => this.emit('error', err));
+      });
   }
 
   /**
