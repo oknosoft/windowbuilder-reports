@@ -21,6 +21,10 @@ class Accumulation extends classes.MetaEventEmitter {
     this.interval = 60000;
     // указатель на текущий таймер
     this.timer = 0;
+
+    // привязываем контекст
+    this.changes = this.changes.bind(this);
+    this.execute = this.execute.bind(this);
   }
 
   /**
@@ -116,11 +120,11 @@ class Accumulation extends classes.MetaEventEmitter {
    */
   execute() {
     clearTimeout(this.timer);
-    const changes = this.changes.bind(this);
-    return Promise.all(this.dbs.map(changes))
+    const {changes, execute, dbs, interval} = this;
+    return Promise.all(dbs.map(changes))
       .catch((err) => this.emit('error', err))
       .then(() => {
-        this.timer = setTimeout(this.execute.bind(this), this.interval);
+        this.timer = setTimeout(execute, interval);
       });
   }
 
