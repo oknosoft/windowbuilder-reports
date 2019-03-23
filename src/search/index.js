@@ -30,10 +30,10 @@ function json(ctx) {
 module.exports = function($p, runtime) {
 
   const log = require('../logger')(runtime);
-  const indexer = require('./indexer')($p);
-  $p.adapters.pouch.on('indexer_page', (page) => {
-    log(`indexed ${page.indexer._count} ${page.bookmark.substr(10, 30)}`);
-  });
+  // const indexer = require('./indexer')($p);
+  // $p.adapters.pouch.on('indexer_page', (page) => {
+  //   log(`indexed ${page.indexer._count} ${page.bookmark.substr(10, 30)}`);
+  // });
 
   return async (ctx, next) => {
 
@@ -44,7 +44,7 @@ module.exports = function($p, runtime) {
 
     if(ctx._json && ctx._auth) {
       try{
-        ctx.body = indexer.find(ctx._json, ctx._auth);
+        ctx.body = await $p.accumulation.find(ctx._json, ctx._auth);
         ctx.status = 200;
       }
       catch(err){

@@ -147,4 +147,4 @@ class Accumulation extends classes.MetaEventEmitter {
   }
 }
 
-module.exports = Accumulation;
+module.exports = require('./finder')(Accumulation);
