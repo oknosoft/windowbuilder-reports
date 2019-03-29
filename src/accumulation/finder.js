@@ -72,7 +72,7 @@ module.exports = function (Proto) {
         const cond = Object.keys(row[fld])[0];
         if(fld === 'date') {
           if(cond === '$lt' || cond === '$lte') {
-            dtill = row[fld][cond];
+            dtill = row[fld][cond].replace(String.fromCharCode(65520), '');
           }
           else if(cond === '$gt' || cond === '$gte') {
             dfrom = row[fld][cond];
@@ -109,20 +109,64 @@ module.exports = function (Proto) {
         search = `and fts @@ websearch_to_tsquery('${search}')`;
       }
 
-      let sql = `select ${fields.join()} from ${mgr.table_name} where date between $1 and $2 ${conditions} ${search} limit ${limit}`;
+      if(flag) {
+        let scroll;
+        const tmp = Math.random().toString().replace('0.', 'tmp');
+        return this.client.query(`drop table if exists ${tmp}`)
+          .then(() => this.client.query(`select ref, row_number() OVER (order by date ${sort}) 
+            INTO temp ${tmp} from ${mgr.table_name} where date between $1 and $2 ${conditions} ${search}`, [dfrom, dtill]))
+          .then(() => this.client.query(`select row_number from ${tmp} where ref = '${ref}'`))
+          .then((res) => {
+            if(res.rows.length) {
+              scroll = parseInt(res.rows[0].row_number, 10) - 1;
+              flag = false;
+            }
+            return this.client.query(`select count(*) from ${tmp}`);
+          })
+          .then((res) => {
+            const count = parseInt(res.rows[0].count, 10);
+            let sql = `select r.ref, ${fields.filter(v => v !== 'ref').join()} from ${tmp} r 
+            inner join ${mgr.table_name} on r.ref = ${mgr.table_name}.ref
+            offset ${skip} limit ${limit}`;
 
-      return this.client.query(sql, [dfrom, dtill.replace(String.fromCharCode(65520), '')])
+            return this.client.query(sql)
+              .then((res) => {
+                this.client.query(`drop table if exists ${tmp};`);
+                return {
+                  docs: res.rows,
+                  scroll,
+                  flag,
+                  count,
+                };
+              });
+          })
+          .catch((err) => {
+            this.client.query(`drop table if exists ${tmp};`);
+            this.emit('err', err);
+          });
+      }
+
+      let sql = `select count(*) from ${mgr.table_name} where date between $1 and $2 ${conditions} ${search}`;
+      return this.client.query(sql, [dfrom, dtill])
         .then((res) => {
-          return {
-            docs: res.rows,
-            scroll: 0,
-            flag,
-            count: res.rowCount,
-          }
+          sql = `select ${fields.join()} from ${mgr.table_name}
+           where date between $1 and $2 ${conditions} ${search}
+           order by date ${sort}
+           offset ${skip} limit ${limit}`;
+          const count = parseInt(res.rows[0].count, 10);
+          return this.client.query(sql, [dfrom, dtill])
+            .then((res) => {
+              return {
+                docs: res.rows,
+                scroll: 0,
+                flag,
+                count,
+              }
+            })
         })
         .catch((err) => {
-          this.emit('error', err);
+          this.emit('err', err);
         });
     }
   }
-}
+};

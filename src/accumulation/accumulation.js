@@ -105,7 +105,11 @@ class Accumulation extends classes.MetaEventEmitter {
         for(const {doc} of res.results) {
           for(const {class_name, listener} of this.listeners) {
             if(doc._id.startsWith(class_name + '|')) {
-              queue = queue.then(() => listener(db, this, doc));
+              queue = queue
+                .then(() => listener(db, this, doc).catch((err) => {
+                  console.log(doc._id);
+                  this.emit('err', [err, doc]);
+                }));
             }
           }
         }
@@ -122,7 +126,7 @@ class Accumulation extends classes.MetaEventEmitter {
     clearTimeout(this.timer);
     const {changes, execute, dbs, interval} = this;
     return Promise.all(dbs.map(changes))
-      .catch((err) => this.emit('error', err))
+      .catch((err) => this.emit('err', err))
       .then(() => {
         this.timer = setTimeout(execute, interval);
       });

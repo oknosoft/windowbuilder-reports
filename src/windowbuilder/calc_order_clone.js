@@ -92,10 +92,7 @@ module.exports = {
       {rows: doc.production || []},
       {rows: doc.extra_fields || []},
       {rows: doc.contact_information || []},
-      {rows: doc.planning || []}])
-      .catch((err) => {
-        this.emit('error', [err, doc]);
-      });
+      {rows: doc.planning || []}]);
   }
 }
 

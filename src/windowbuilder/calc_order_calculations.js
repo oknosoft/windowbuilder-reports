@@ -22,18 +22,10 @@ module.exports = {
         partner = EXCLUDED.partner,
         organization = EXCLUDED.organization,
         amount_debit = EXCLUDED.amount_debit,
-        amount_credit = EXCLUDED.amount_credit;`, [ref, class_name, 1, new Date(doc.date), ref, doc.partner, doc.organization, doc.doc_amount])
-        .catch((err) => {
-          console.error(doc);
-          err = null;
-        });
+        amount_credit = EXCLUDED.amount_credit;`, [ref, class_name, 1, new Date(doc.date), ref, doc.partner, doc.organization, doc.doc_amount]);
     }
     else {
-      return acc.client.query(`DELETE FROM areg_calculations WHERE register = $1;`, [ref])
-        .catch((err) => {
-          console.error(doc);
-          err = null;
-        });
+      return acc.client.query(`DELETE FROM areg_calculations WHERE register = $1;`, [ref]);
     }
   }
 }
