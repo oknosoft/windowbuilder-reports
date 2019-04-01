@@ -13,20 +13,20 @@
     "start": "node ./src",
     "debug": "node --inspect-brk ./src",
     "canvas": "apt-get install libcairo2-dev libjpeg62-turbo-dev libpango1.0-dev libgif-dev build-essential g++",
-    "meta:link": "node ./scripts/meta.link",
-    "drawer:fetch": "node scripts/drawer.fetch.js"
+    "meta:link": "node ./scripts/meta.link"
   },
   "dependencies": {
     "@koa/cors": "^2.2.3",
     "canvas": "^1.6.13",
     "koa": "^2.7.0",
     "koa-better-router": "^2.1",
-    "metadata-abstract-ui": "2.0.18-beta.4",
-    "metadata-core": "2.0.18-beta.4",
-    "metadata-pouchdb": "2.0.18-beta.4",
+    "metadata-abstract-ui": "2.0.18-beta.5",
+    "metadata-core": "2.0.18-beta.5",
+    "metadata-pouchdb": "2.0.18-beta.5",
+    "metadata-postgres": "2.0.18-beta.5",
     "node-fetch": "^2.3.0",
     "paper-jsdom-canvas": "^0.12",
-    "pg": "^7.9.0"
+    "windowbuilder": "github:oknosoft/windowbuilder"
   },
   "devDependencies": {
     "md5-file": "^4.0"

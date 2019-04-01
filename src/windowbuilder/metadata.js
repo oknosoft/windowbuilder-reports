@@ -8,7 +8,7 @@ const MetaEngine = require('metadata-core')
 const settings = require('../../config/app.settings');
 
 // функция инициализации структуры метаданных
-const meta_init = require('windowbuilder/init');
+const meta_init = require('windowbuilder/public/dist/init');
 
 module.exports = function (runtime) {
 
