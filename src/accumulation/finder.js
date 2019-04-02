@@ -21,36 +21,63 @@ const fields = [
   'department',
   'note'];
 
-function truth(conditions, fld, cond) {
-  const blank = '00000000-0000-0000-0000-000000000000';
+function apply_rls($and, branch) {
+  if(!branch) return;
 
-  conditions += ' and ';
+  // по подразделению
+  let filter;
+  if(!$and.some((row) => {
+    const fld = Object.keys(row)[0];
+    if(fld === 'department') {
+      const cond = row[fld];
+      filter = row;
+      if(cond.$in) {
+        const acond = typeof cond.$in === 'string' ? cond.$in.split(',').map((v) => v.trim()) : cond.$in;
+        cond.$in = acond.filter(acl_obj => branch.divisions.find({acl_obj}));
+        return true;
+      }
+      else if(cond.$eq) {
+        const acond = [cond.$eq];
+        delete cond.$eq;
+        cond.$in = acond.filter(acl_obj => branch.divisions.find({acl_obj}));
+        return true;
+      }
+    }
+  })) {
+    if(!filter) {
+      $and.push({department: {$in: branch.divisions._obj.map(v => v.acl_obj)}});
+    }
+    else {
+      filter.department = {$in: branch.divisions._obj.map(v => v.acl_obj)};
+    }
+  }
 
-  if(cond === true || (cond && cond.hasOwnProperty('$ne') && !cond.$ne)) {
-    conditions += `${fld} = true`;
-  }
-  else if(cond === false || (cond && cond.hasOwnProperty('$ne') && cond.$ne && typeof cond.$ne === 'boolean')) {
-    conditions += `${fld} = false`;
-  }
-  else if(cond && cond.hasOwnProperty('filled')) {
-    conditions += `${fld} is not null and ${fld} != ${blank}`;
-  }
-  else if(cond && cond.hasOwnProperty('nfilled')) {
-    conditions += `(${fld} is null or ${fld} = ${blank})`;
-  }
-  else if(cond && cond.hasOwnProperty('$ne')) {
-    conditions += `${fld} != ${cond.$ne}`;
-  }
-  else if(cond && cond.hasOwnProperty('$in')) {
-    const acond = typeof cond.$in === 'string' ? cond.$in.split(',').map((v) => v.trim()) : cond.$in;
-    conditions += `${fld} in (${acond.map(v => typeof v !== 'string' || v[0] === `'` || v[0] === `"` ? v : `'${v}'`).join()})`;
-  }
-  else if(cond && cond.hasOwnProperty('$nin')) {
-    const acond = typeof cond.$nin === 'string' ? cond.$nin.split(',').map((v) => v.trim()) : cond.$nin;
-    conditions += `${fld} not in (${acond.map(v => typeof v !== 'string' || v[0] === `'` || v[0] === `"` ? v : `'${v}'`).join()})`;
-  }
-  else {
-    conditions += `${fld} = ${cond}`;
+  // по контрагенту
+  filter = undefined;
+  if(!$and.some((row) => {
+    const fld = Object.keys(row)[0];
+    if(fld === 'partner') {
+      const cond = row[fld];
+      filter = row;
+      if(cond.$in) {
+        const acond = typeof cond.$in === 'string' ? cond.$in.split(',').map((v) => v.trim()) : cond.$in;
+        cond.$in = acond.filter(acl_obj => branch.partners.find({acl_obj}));
+        return true;
+      }
+      else if(cond.$eq) {
+        const acond = [cond.$eq];
+        delete cond.$eq;
+        cond.$in = acond.filter(acl_obj => branch.partners.find({acl_obj}));
+        return true;
+      }
+    }
+  })) {
+    if(!filter) {
+      $and.push({partner: {$in: branch.partners._obj.map(v => v.acl_obj)}});
+    }
+    else {
+      filter.partner = {$in: branch.partners._obj.map(v => v.acl_obj)};
+    }
   }
 }
 
@@ -65,9 +92,47 @@ module.exports = function (Proto) {
         throw err;
       }
 
-      // извлекаем значения полей фильтра из селектора
+      const {$and} = selector;
+      // если указан отдел абонента, принудительно дополняем селектор
+      apply_rls($and, branch);
+
       let dfrom, dtill, class_name, search = '', conditions = '';
-      for(const row of selector.$and) {
+
+      function truth(fld, cond) {
+        const blank = '00000000-0000-0000-0000-000000000000';
+
+        conditions += ' and ';
+
+        if(cond === true || (cond && cond.hasOwnProperty('$ne') && !cond.$ne)) {
+          conditions += `${fld} = true`;
+        }
+        else if(cond === false || (cond && cond.hasOwnProperty('$ne') && cond.$ne && typeof cond.$ne === 'boolean')) {
+          conditions += `${fld} = false`;
+        }
+        else if(cond && cond.hasOwnProperty('filled')) {
+          conditions += `${fld} is not null and ${fld} != ${blank}`;
+        }
+        else if(cond && cond.hasOwnProperty('nfilled')) {
+          conditions += `(${fld} is null or ${fld} = ${blank})`;
+        }
+        else if(cond && cond.hasOwnProperty('$ne')) {
+          conditions += `${fld} != ${cond.$ne}`;
+        }
+        else if(cond && cond.hasOwnProperty('$in')) {
+          const acond = typeof cond.$in === 'string' ? cond.$in.split(',').map((v) => v.trim()) : cond.$in;
+          conditions += `${fld} in (${acond.map(v => typeof v !== 'string' || v[0] === `'` || v[0] === `"` ? v : `'${v}'`).join()})`;
+        }
+        else if(cond && cond.hasOwnProperty('$nin')) {
+          const acond = typeof cond.$nin === 'string' ? cond.$nin.split(',').map((v) => v.trim()) : cond.$nin;
+          conditions += `${fld} not in (${acond.map(v => typeof v !== 'string' || v[0] === `'` || v[0] === `"` ? v : `'${v}'`).join()})`;
+        }
+        else {
+          conditions += `${fld} = ${cond}`;
+        }
+      }
+
+      // извлекаем значения полей фильтра из селектора
+      for(const row of $and) {
         const fld = Object.keys(row)[0];
         const cond = Object.keys(row[fld])[0];
         if(fld === 'date') {
@@ -85,7 +150,7 @@ module.exports = function (Proto) {
           class_name = cond ? row[fld][cond] : row[fld];
         }
         else if(fields.includes(fld)) {
-          truth(conditions, fld, row[fld]);
+          truth(fld, row[fld]);
         }
       }
 

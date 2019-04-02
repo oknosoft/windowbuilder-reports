@@ -84,11 +84,21 @@ module.exports = function($p) {
             specification: _obj.specification ? _obj.specification.map((o) => {
               const {_row} = o;
               const dop = {article: _row.nom.article};
-              if(!_row.origin.empty()) {
-                dop.origin_name = _row.origin.name;
+              if($p.utils.is_data_obj(_row.origin)){
+                if(_row.origin.empty()) {
+                  dop.origin = undefined;
+                }
+                else {
+                  dop.origin = {ref: _row.origin.ref, id: _row.origin.id, name: _row.origin.name, class_name: _row.origin.class_name};
+                }
               }
-              if(!_row.specify.empty()) {
-                dop.specify_name = _row.specify.name;
+              if($p.utils.is_data_obj(_row.specify)){
+                if(_row.specify.empty()) {
+                  dop.specify = undefined;
+                }
+                else {
+                  dop.specify = {ref: _row.specify.ref, id: _row.specify.id, name: _row.specify.name, class_name: _row.origin.class_name};
+                }
               }
               return Object.assign(o, dop);
             }) : [],
