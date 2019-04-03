@@ -86,7 +86,7 @@ module.exports = function (Proto) {
 
     find({selector, sort, ref, limit, skip = 0}, {branch}) {
 
-      if(!this.client) {
+      if(!this.client || !this.client._connected) {
         const err = new Error('Индекс прочитн не полностью, повторите запрос позже');
         err.status = 403;
         throw err;

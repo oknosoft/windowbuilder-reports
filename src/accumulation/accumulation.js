@@ -67,7 +67,7 @@ class Accumulation extends classes.MetaEventEmitter {
         this.emit('init');
         this.execute();
       })
-      .catch((err) => this.emit('error', err));
+      .catch((err) => this.emit('err', err));
   }
 
   /**
