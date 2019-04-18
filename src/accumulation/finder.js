@@ -22,7 +22,7 @@ const fields = [
   'note'];
 
 function apply_rls($and, branch) {
-  if(!branch) return;
+  if(!branch || branch.empty()) return;
 
   // по подразделению
   let filter;
