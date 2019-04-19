@@ -126,6 +126,14 @@ module.exports = function (Proto) {
           const acond = typeof cond.$nin === 'string' ? cond.$nin.split(',').map((v) => v.trim()) : cond.$nin;
           conditions += `${fld} not in (${acond.map(v => typeof v !== 'string' || v[0] === `'` || v[0] === `"` ? v : `'${v}'`).join()})`;
         }
+        else if(cond && cond.hasOwnProperty('$eq')) {
+          if(typeof cond.$eq === 'string') {
+            conditions += `${fld} = '${cond.$eq}'`;
+          }
+          else if(typeof cond.$eq === 'number') {
+            conditions += `${fld} = ${cond.$eq}`;
+          }
+        }
         else {
           conditions += `${fld} = ${cond}`;
         }
