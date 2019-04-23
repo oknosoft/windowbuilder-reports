@@ -56,18 +56,55 @@ class Accumulation extends classes.MetaEventEmitter {
             CONNECTION LIMIT = -1;`);
         }
       })
-      .then(() => client.end())
-      .then(() => {
-        this.client = new Client(conf);
-        return this.client.connect();
+      .then((create_metadata) => {
+        const reconnect = (client) => {
+          return client.end()
+            .then(() => {
+              this.client = new Client(conf);
+              return this.client.connect();
+            })
+        };
+        return reconnect(client)
+          .then(() => {
+            if(create_metadata) {
+              return this.db_metadata()
+                .then(() => reconnect(this.client));
+            }
+          });
       })
-      .then(() => this.client.query(`CREATE TABLE IF NOT EXISTS settings (param character varying(255) PRIMARY KEY, value text)`))
       .then(() => this.set_param('date', Date.now()))
       .then(() => {
         this.emit('init');
         this.execute();
       })
       .catch((err) => this.emit('err', err));
+  }
+
+  /**
+   * Создаёт таблицы, индексы и триггеры
+   * @return {Promise<void>}
+   */
+  db_metadata() {
+    const {client} = this;
+    const raw = require('fs').readFileSync(require.resolve('./pg.sql'), 'utf8').split('\n');
+    let sql = '';
+    for(const row of raw) {
+      sql += '\n';
+      if(!row.startsWith('--')){
+        sql += row;
+      }
+    }
+    for(let i = 0; i < 5; i++) {
+      sql = sql.replace(/\n\n\n/g, '\n\n');
+    }
+    let res = Promise.resolve();
+    for(const row of sql.split('\n\n')) {
+      if(!row) {
+        continue;
+      }
+      res = res.then(() => client.query(row));
+    }
+    return res;
   }
 
   /**
