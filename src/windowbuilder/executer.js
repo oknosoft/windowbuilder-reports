@@ -5,7 +5,7 @@ const auth = require('../auth');
 module.exports = function($p) {
 
   // формирует структуру с эскизами заполнений
-  async function glasses({project, view, prod, res, builder_props}) {
+  async function glasses({project, view, prod, res, builder_props, format}) {
     for(const ox of prod){
 
       const {_obj: {glasses, coordinates}, name} = ox;
@@ -22,7 +22,7 @@ module.exports = function($p) {
         ox.glasses.forEach((row) => {
           const glass = project.draw_fragment({elm: row.elm});
           // подтянем формулу стеклопакета
-          res[ref].imgs[`g${row.elm}`] = view.element.toBuffer().toString('base64');
+          res[ref].imgs[`g${row.elm}`] = format === 'svg' ? project.get_svg() : view.element.toBuffer().toString('base64');
           if(glass){
             row.formula = glass.formula(true);
             glass.visible = false;
@@ -44,7 +44,7 @@ module.exports = function($p) {
     const res = {number_doc: calc_order.number_doc};
 
     const {query} = url.parse(ctx.req.url);
-    let prms, builder_props;
+    let prms, builder_props, format;
     if(query && query.length > 3) {
       prms = qs.parse(query.replace('?',''));
       if(prms.builder_props) {
@@ -53,11 +53,12 @@ module.exports = function($p) {
         }
         catch(err){}
       }
+      format = prms.format;
     }
 
     if(prms && prms.hasOwnProperty('glasses')) {
       const {project, view} = editor;
-      await glasses({project, view, prod, res, builder_props});
+      await glasses({project, view, prod, res, builder_props, format});
     }
     else{
       let counter = 8;
@@ -122,18 +123,18 @@ module.exports = function($p) {
             await project.load(ox, builder_props || true)
               .then(() => {
                 res[ref].imgs = {
-                  'l0': view.element.toBuffer().toString('base64')
+                  'l0': format === 'svg' ? project.get_svg() : view.element.toBuffer().toString('base64')
                 };
 
                 ox.constructions.forEach(({cnstr}) => {
                   project.draw_fragment({elm: -cnstr});
-                  res[ref].imgs[`l${cnstr}`] = view.element.toBuffer().toString('base64');
+                  res[ref].imgs[`l${cnstr}`] = format === 'svg' ? project.get_svg() : view.element.toBuffer().toString('base64');
                 });
 
                 ox.glasses.forEach((row) => {
                   const glass = project.draw_fragment({elm: row.elm});
                   // подтянем формулу стеклопакета
-                  res[ref].imgs[`g${row.elm}`] = view.element.toBuffer().toString('base64');
+                  res[ref].imgs[`g${row.elm}`] = format === 'svg' ? project.get_svg() : view.element.toBuffer().toString('base64');
                   if(glass){
                     res[ref].glasses[row.row - 1].formula = glass.formula(true);
                     glass.visible = false;
