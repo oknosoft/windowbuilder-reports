@@ -5,7 +5,7 @@ const auth = require('../auth');
 module.exports = function($p) {
 
   // формирует структуру с эскизами заполнений
-  async function glasses({project, view, prod, res, builder_props}) {
+  async function glasses({project, view, prod, res, builder_props, format}) {
     for(const ox of prod){
 
       const {_obj: {glasses, coordinates}, name} = ox;
@@ -22,7 +22,12 @@ module.exports = function($p) {
         ox.glasses.forEach((row) => {
           const glass = project.draw_fragment({elm: row.elm});
           // подтянем формулу стеклопакета
-          res[ref].imgs[`g${row.elm}`] = view.element.toBuffer().toString('base64');
+          if(format.includes('png')) {
+            res[ref].imgs[`g${row.elm}`] = view.element.toBuffer().toString('base64');
+          }
+          if(format.includes('svg')) {
+            res[ref].imgs[`sg${row.elm}`] = project.get_svg();
+          }
           if(glass){
             row.formula = glass.formula(true);
             glass.visible = false;
@@ -55,9 +60,11 @@ module.exports = function($p) {
       }
     }
 
+    const format = prms && prms.hasOwnProperty('format') ? (prms.format ? prms.format.split(',') : []) : ['png'];
+
     if(prms && prms.hasOwnProperty('glasses')) {
       const {project, view} = editor;
-      await glasses({project, view, prod, res, builder_props});
+      await glasses({project, view, prod, res, builder_props, format});
     }
     else{
       let counter = 8;
@@ -115,25 +122,39 @@ module.exports = function($p) {
             leading_elm: _obj.leading_elm,
             leading_product: _obj.leading_product,
             product: _obj.product,
+            imgs: {},
           }._clone();
 
           if(_obj.coordinates && _obj.coordinates.length){
 
             await project.load(ox, builder_props || true)
               .then(() => {
-                res[ref].imgs = {
-                  'l0': view.element.toBuffer().toString('base64')
-                };
+                if(format.includes('png')) {
+                  res[ref].imgs.l0 = view.element.toBuffer().toString('base64');
+                }
+                if(format.includes('svg')) {
+                  res[ref].imgs.s0 = project.get_svg();
+                }
 
                 ox.constructions.forEach(({cnstr}) => {
                   project.draw_fragment({elm: -cnstr});
-                  res[ref].imgs[`l${cnstr}`] = view.element.toBuffer().toString('base64');
+                  if(format.includes('png')) {
+                    res[ref].imgs[`l${cnstr}`] = view.element.toBuffer().toString('base64');
+                  }
+                  if(format.includes('svg')) {
+                    res[ref].imgs[`s${cnstr}`] = project.get_svg();
+                  }
                 });
 
                 ox.glasses.forEach((row) => {
                   const glass = project.draw_fragment({elm: row.elm});
                   // подтянем формулу стеклопакета
-                  res[ref].imgs[`g${row.elm}`] = view.element.toBuffer().toString('base64');
+                  if(format.includes('png')) {
+                    res[ref].imgs[`g${row.elm}`] = view.element.toBuffer().toString('base64');
+                  }
+                  if(format.includes('svg')) {
+                    res[ref].imgs[`sg${row.elm}`] = project.get_svg();
+                  }
                   if(glass){
                     res[ref].glasses[row.row - 1].formula = glass.formula(true);
                     glass.visible = false;
