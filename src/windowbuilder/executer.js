@@ -26,7 +26,7 @@ module.exports = function($p) {
             res[ref].imgs[`g${row.elm}`] = view.element.toBuffer().toString('base64');
           }
           if(format.includes('svg')) {
-            res[ref].imgs[`sg${row.elm}`] = project.get_svg();
+            res[ref].imgs[`sg${row.elm}`] = $p.utils.scale_svg(project.get_svg(), 1000, 0);
           }
           if(glass){
             row.formula = glass.formula(true);
@@ -133,7 +133,7 @@ module.exports = function($p) {
                   res[ref].imgs.l0 = view.element.toBuffer().toString('base64');
                 }
                 if(format.includes('svg')) {
-                  res[ref].imgs.s0 = project.get_svg();
+                  res[ref].imgs.s0 = $p.utils.scale_svg(project.get_svg(), 1000, 0);
                 }
 
                 ox.constructions.forEach(({cnstr}) => {
@@ -142,7 +142,7 @@ module.exports = function($p) {
                     res[ref].imgs[`l${cnstr}`] = view.element.toBuffer().toString('base64');
                   }
                   if(format.includes('svg')) {
-                    res[ref].imgs[`s${cnstr}`] = project.get_svg();
+                    res[ref].imgs[`s${cnstr}`] = $p.utils.scale_svg(project.get_svg(), 1000, 0);
                   }
                 });
 
@@ -153,7 +153,7 @@ module.exports = function($p) {
                     res[ref].imgs[`g${row.elm}`] = view.element.toBuffer().toString('base64');
                   }
                   if(format.includes('svg')) {
-                    res[ref].imgs[`sg${row.elm}`] = project.get_svg();
+                    res[ref].imgs[`sg${row.elm}`] = $p.utils.scale_svg(project.get_svg(), 1000, 0);
                   }
                   if(glass){
                     res[ref].glasses[row.row - 1].formula = glass.formula(true);
