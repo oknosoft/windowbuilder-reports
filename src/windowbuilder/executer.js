@@ -135,7 +135,8 @@ module.exports = function($p, log) {
                 if(format.includes('svg')) {
                   res[ref].imgs.s0 = project.get_svg();
                 }
-
+              })
+              .then(() => {
                 ox.constructions.forEach(({cnstr}) => {
                   project.draw_fragment({elm: -cnstr});
                   if(format.includes('png')) {
@@ -145,25 +146,25 @@ module.exports = function($p, log) {
                     res[ref].imgs[`s${cnstr}`] = project.get_svg();
                   }
                 });
-
-                ox.glasses.forEach((row) => {
-                  const glass = project.draw_fragment({elm: row.elm});
+              })
+              .then(() => {
+                ox.glasses.forEach(({row, elm}) => {
+                  const glass = project.draw_fragment({elm});
                   // подтянем формулу стеклопакета
                   if(format.includes('png')) {
-                    res[ref].imgs[`g${row.elm}`] = view.element.toBuffer().toString('base64');
+                    res[ref].imgs[`g${elm}`] = view.element.toBuffer().toString('base64');
                   }
                   if(format.includes('svg')) {
-                    res[ref].imgs[`sg${row.elm}`] = project.get_svg();
+                    res[ref].imgs[`sg${elm}`] = project.get_svg();
                   }
                   if(glass){
-                    res[ref].glasses[row.row - 1].formula = glass.formula(true);
+                    res[ref].glasses[row - 1].formula = glass.formula(true);
                     glass.visible = false;
                   }
                 });
-
-                ox._data._modified = false;
               })
               .then(() => {
+                ox._data._modified = false;
                 project.clear();
                 ox.unload();
               });
