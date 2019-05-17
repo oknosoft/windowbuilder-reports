@@ -39,7 +39,7 @@ module.exports = function (runtime) {
   }
   $p.Editor = Editor;
 
-  const executer = require('./executer')($p);
+  const executer = require('./executer')($p, log);
   log('paper: required, inited & modified');
 
   return {executer, $p};

@@ -2,7 +2,7 @@ const url = require('url');
 const qs = require('qs');
 const auth = require('../auth');
 
-module.exports = function($p) {
+module.exports = function($p, log) {
 
   // формирует структуру с эскизами заполнений
   async function glasses({project, view, prod, res, builder_props, format}) {
@@ -290,9 +290,32 @@ module.exports = function($p) {
       return;
     }
 
+    // контролируем водопад
+    if(!$p.hasOwnProperty('queue')) {
+      $p.queue = 0;
+    }
+    $p.queue++;
+    const start = Date.now();
+
+    const fin = () => {
+      $p.queue--;
+      log({
+        start,
+        duaration: Date.now() - start,
+      });
+    }
+
     // проверяем ограничение по ip и авторизацию
     await auth(ctx, $p)
       .catch(() => null);
+
+    log({
+      start,
+      ip: ctx.req.headers['x-real-ip'] || ctx.ip,
+      url: ctx.req.url,
+      auth: ctx._auth && ctx._auth.username,
+      queue: $p.queue,
+    });
 
     if(!ctx._auth) {
       return;
@@ -301,19 +324,22 @@ module.exports = function($p) {
     try{
       switch (ctx.params.class){
       case 'doc.calc_order':
-        return await prod(ctx, next);
+        return await prod(ctx, next).then(fin);
       case 'array':
-        return await array(ctx, next);
+        return await array(ctx, next).then(fin);
       case 'png':
-        return await png(ctx, next);
+        return await png(ctx, next).then(fin);
       case 'svg':
-        return await svg(ctx, next);
+        return await svg(ctx, next).then(fin);
+      default:
+        fin();
       }
     }
     catch(err){
+      fin();
       ctx.status = 500;
       ctx.body = err.stack;
-      console.error(err);
+      log(err);
     }
 
   };
