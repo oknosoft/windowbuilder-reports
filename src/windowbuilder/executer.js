@@ -104,7 +104,15 @@ module.exports = function($p, log) {
                   dop.specify = undefined;
                 }
                 else {
-                  dop.specify = {ref: _row.specify.ref, id: _row.specify.id, name: _row.specify.name, class_name: _row.origin.class_name};
+                  dop.specify = {ref: _row.specify.ref, id: _row.specify.id, name: _row.specify.name, class_name: _row.specify.class_name};
+                }
+              }
+              if($p.utils.is_data_obj(_row.characteristic)){
+                if(_row.characteristic.empty()) {
+                  dop.characteristic = undefined;
+                }
+                else {
+                  dop.characteristic = {ref: _row.characteristic.ref, id: _row.characteristic.id, name: _row.characteristic.name, class_name: _row.characteristic.class_name};
                 }
               }
               return Object.assign(o, dop);
