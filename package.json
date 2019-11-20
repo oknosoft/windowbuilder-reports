@@ -18,15 +18,15 @@
   "dependencies": {
     "@koa/cors": "^3.0",
     "canvas-prebuilt": "^1.6.11",
-    "koa": "^2.10.0",
+    "koa": "^2.11.0",
     "koa-better-router": "^2.1",
-    "metadata-abstract-ui": "2.0.21-beta.2",
-    "metadata-core": "2.0.21-beta.2",
-    "metadata-postgres": "2.0.21-beta.2",
-    "metadata-pouchdb": "2.0.21-beta.2",
+    "metadata-abstract-ui": "2.0.21-beta.3",
+    "metadata-core": "2.0.21-beta.3",
+    "metadata-postgres": "2.0.21-beta.3",
+    "metadata-pouchdb": "2.0.21-beta.3",
     "node-fetch": "^2.6.0",
     "paper-jsdom-canvas": "^0.12.3",
-    "windowbuilder": "github:oknosoft/windowbuilder"
+    "windowbuilder": "github:oknosoft/windowbuilder#3588a841fc52015b54325a2d3b2d3f4b032e4606"
   },
   "devDependencies": {
     "md5-file": "^4.0"
