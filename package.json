@@ -26,7 +26,7 @@
     "metadata-pouchdb": "2.0.21-beta.3",
     "node-fetch": "^2.6.0",
     "paper-jsdom-canvas": "^0.12.3",
-    "windowbuilder": "github:oknosoft/windowbuilder#3588a841fc52015b54325a2d3b2d3f4b032e4606"
+    "windowbuilder": "github:oknosoft/windowbuilder#836e13b0dc412ca5faf99ba88ee5498a4565a921"
   },
   "devDependencies": {
     "md5-file": "^4.0"
