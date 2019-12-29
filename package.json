@@ -25,8 +25,8 @@
     "metadata-postgres": "2.0.21-beta.4",
     "metadata-pouchdb": "2.0.21-beta.4",
     "node-fetch": "^2.6.0",
-    "paper-jsdom-canvas": "^0.12.3",
-    "windowbuilder": "github:oknosoft/windowbuilder#029e81f0f45e7942dd27849e518c419a07049030"
+    "paper-jsdom-canvas": "^0.12.4",
+    "windowbuilder": "github:oknosoft/windowbuilder#6207753004bab3b1fb940eea12294157e8248931"
   },
   "devDependencies": {
     "md5-file": "^4.0"

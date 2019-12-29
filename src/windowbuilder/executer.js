@@ -300,23 +300,23 @@ module.exports = function($p, log) {
 
     const fin = () => {
       $p.queue--;
-      log({
-        start,
-        duaration: Date.now() - start,
-      });
+      // log({
+      //   start,
+      //   duaration: Date.now() - start,
+      // });
     }
 
     // проверяем ограничение по ip и авторизацию
     await auth(ctx, $p)
       .catch(() => null);
 
-    log({
-      start,
-      ip: ctx.req.headers['x-real-ip'] || ctx.ip,
-      url: ctx.req.url,
-      auth: ctx._auth && ctx._auth.username,
-      queue: $p.queue,
-    });
+    // log({
+    //   start,
+    //   ip: ctx.req.headers['x-real-ip'] || ctx.ip,
+    //   url: ctx.req.url,
+    //   auth: ctx._auth && ctx._auth.username,
+    //   queue: $p.queue,
+    // });
 
     if(!ctx._auth) {
       return;
