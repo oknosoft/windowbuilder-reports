@@ -1,7 +1,7 @@
 {
   "name": "windowbuilder-reports",
   "description": "Reports and image rendering for windowbuilder project",
-  "version": "2.0.247",
+  "version": "2.0.250",
   "author": "Evgeniy Malyarov <info@oknosoft.ru> (http://www.oknosoft.ru)",
   "license": "SEE LICENSE IN LICENSE.en.md",
   "main": "src/index.js",
@@ -20,13 +20,13 @@
     "canvas-prebuilt": "^1.6.11",
     "koa": "^2.11.0",
     "koa-better-router": "^2.1",
-    "metadata-abstract-ui": "2.0.21-beta.4",
-    "metadata-core": "2.0.21-beta.4",
-    "metadata-postgres": "2.0.21-beta.4",
-    "metadata-pouchdb": "2.0.21-beta.4",
+    "metadata-abstract-ui": "2.0.22-beta.1",
+    "metadata-core": "2.0.22-beta.1",
+    "metadata-postgres": "2.0.22-beta.1",
+    "metadata-pouchdb": "2.0.22-beta.1",
     "node-fetch": "^2.6.0",
     "paper-jsdom-canvas": "^0.12.4",
-    "windowbuilder": "github:oknosoft/windowbuilder#6207753004bab3b1fb940eea12294157e8248931"
+    "windowbuilder": "github:oknosoft/windowbuilder#b0789ff24cc035016e6407e2e0c47ee310449c39"
   },
   "devDependencies": {
     "md5-file": "^4.0"
