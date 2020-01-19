@@ -6,7 +6,7 @@ module.exports = function (runtime) {
   const log = require('../logger')(runtime);
   const paper = require('paper/dist/paper-core');
   const $p = require('./metadata')(runtime);
-  const EditorInvisible = require('windowbuilder/public/dist/drawer')({$p, paper});
+  const EditorInvisible = require('windowbuilder/dist/drawer')({$p, paper});
 
   /**
    * Невизуальный редактор
