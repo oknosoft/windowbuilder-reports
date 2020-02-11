@@ -23,6 +23,8 @@ module.exports = function settings(prm) {
       meta: 'auth/meta'
     },
 
+    use_meta: false,
+
     // авторизация couchdb
     user_node: {
       username: env.DBUSER || 'admin',
