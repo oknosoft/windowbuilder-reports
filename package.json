@@ -20,13 +20,13 @@
     "canvas-prebuilt": "^1.6.11",
     "koa": "^2.11.0",
     "koa-better-router": "^2.1",
-    "metadata-abstract-ui": "2.0.22-beta.3",
-    "metadata-core": "2.0.22-beta.3",
-    "metadata-postgres": "2.0.22-beta.3",
-    "metadata-pouchdb": "2.0.22-beta.3",
+    "metadata-abstract-ui": "2.0.22-beta.4",
+    "metadata-core": "2.0.22-beta.4",
+    "metadata-postgres": "2.0.22-beta.4",
+    "metadata-pouchdb": "2.0.22-beta.4",
     "node-fetch": "^2.6.0",
     "paper-jsdom-canvas": "^0.12.4",
-    "windowbuilder": "github:oknosoft/windowbuilder-core#3a4c42345261be02be6e5520331938a55e7669cc"
+    "windowbuilder": "github:oknosoft/windowbuilder-core#22e0b394bf69a0c39e42b88f892b9fb1065dba8b"
   },
   "devDependencies": {
     "md5-file": "^4.0"
