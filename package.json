@@ -18,18 +18,18 @@
   "dependencies": {
     "@koa/cors": "^3.1.0",
     "canvas": "^2.6.1",
-    "koa": "^2.12.0",
+    "koa": "^2.12.1",
     "koa-better-router": "^2.1",
     "metadata-abstract-ui": "2.0.22-beta.7",
     "metadata-core": "2.0.22-beta.7",
     "metadata-postgres": "2.0.22-beta.7",
     "metadata-pouchdb": "2.0.22-beta.7",
-    "node-fetch": "^2.6.0",
     "paper-jsdom-canvas": "^0.12.8",
-    "windowbuilder": "github:oknosoft/windowbuilder-core#52fa936560803643bfe712b11242575c4a923c3d"
+    "windowbuilder": "github:oknosoft/windowbuilder-core#ada96045e23a35513b37ca02cb29b8047ac4594d"
   },
   "devDependencies": {
-    "md5-file": "^5.0"
+    "md5-file": "^5.0",
+    "node-fetch": "^2.6.0"
   },
   "homepage": "http://www.oknosoft.ru/zd/",
   "repository": {
