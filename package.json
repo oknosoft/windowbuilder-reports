@@ -18,14 +18,14 @@
   "dependencies": {
     "@koa/cors": "^3.1.0",
     "canvas": "^2.6.1",
-    "koa": "^2.12.1",
+    "koa": "^2.13.0",
     "koa-better-router": "^2.1",
-    "metadata-abstract-ui": "2.0.22-beta.7",
-    "metadata-core": "2.0.22-beta.7",
-    "metadata-postgres": "2.0.22-beta.7",
-    "metadata-pouchdb": "2.0.22-beta.7",
-    "paper-jsdom-canvas": "^0.12.8",
-    "windowbuilder": "github:oknosoft/windowbuilder-core#ada96045e23a35513b37ca02cb29b8047ac4594d"
+    "metadata-abstract-ui": "2.0.23-beta.2",
+    "metadata-core": "2.0.23-beta.2",
+    "metadata-postgres": "2.0.23-beta.2",
+    "metadata-pouchdb": "2.0.23-beta.2",
+    "paper-jsdom-canvas": "0.12.8",
+    "windowbuilder": "github:oknosoft/windowbuilder-core#22a99a2eb8e8f6df1493ff573aca4e84ef02d5f1"
   },
   "devDependencies": {
     "md5-file": "^5.0",
