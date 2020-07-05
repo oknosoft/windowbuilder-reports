@@ -1,11 +1,8 @@
 'use strict';
 
-module.exports = function (runtime) {
+module.exports = function ($p, log) {
 
-  // Logger
-  const log = require('../logger')(runtime);
   const paper = require('paper/dist/paper-core');
-  const $p = require('./metadata')(runtime);
   const EditorInvisible = require('windowbuilder/dist/drawer')({$p, paper});
 
   /**
@@ -42,5 +39,5 @@ module.exports = function (runtime) {
   const executer = require('./executer')($p, log);
   log('paper: required, inited & modified');
 
-  return {executer, $p};
+  return executer;
 };

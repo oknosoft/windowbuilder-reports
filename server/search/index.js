@@ -6,7 +6,6 @@
  * Created by Evgeniy Malyarov on 29.09.2018.
  */
 
-const auth = require('../auth');
 
 function json(ctx) {
   return new Promise((resolve, reject) => {
@@ -27,9 +26,8 @@ function json(ctx) {
 
 
 
-module.exports = function($p, runtime) {
+module.exports = function($p, log) {
 
-  const log = require('../logger')(runtime);
   // const indexer = require('./indexer')($p);
   // $p.adapters.pouch.on('indexer_page', (page) => {
   //   log(`indexed ${page.indexer._count} ${page.bookmark.substr(10, 30)}`);

@@ -6,9 +6,7 @@
  * Created by Evgeniy Malyarov on 22.03.2019.
  */
 
-const auth = require('../auth');
-
-module.exports = function($p, runtime) {
+module.exports = function($p, log) {
 
   return async (ctx, next) => {
 

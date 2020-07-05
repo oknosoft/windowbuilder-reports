@@ -1,14 +1,13 @@
 /**
  *
  *
- * @module get
+ * @module post
  *
  * Created by Evgeniy Malyarov on 22.03.2019.
  */
 
-const auth = require('../auth');
 
-module.exports = function($p, runtime) {
+module.exports = function($p, log) {
 
   return async (ctx, next) => {
 
@@ -27,15 +26,12 @@ module.exports = function($p, runtime) {
     //   return;
     // }
 
-    if(!ctx.params.path) {
-      ctx.body = {
-        ok: true,
-      };
-    }
-
     try{
-      switch (ctx.params.class){
-
+      switch (ctx.params.path){
+      default:
+        ctx.body = {
+          ok: true,
+        }
       }
     }
     catch(err){

@@ -1,6 +1,5 @@
 const url = require('url');
 const qs = require('qs');
-const auth = require('../auth');
 
 module.exports = function($p, log) {
 
