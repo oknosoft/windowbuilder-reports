@@ -39,31 +39,29 @@ module.exports = function($p, log) {
 
 
   // формирует json описания продукции с эскизами
-  async function prod(ctx, next) {
+  async function prod(req, res) {
+
+    const {parsed: {paths}, method, query} = req;
 
     let editor = new $p.Editor();
     const {nom} = $p.cat;
-    const calc_order = await $p.doc.calc_order.get(ctx.params.ref, 'promise');
+    const calc_order = await $p.doc.calc_order.get(paths[3], 'promise');
     const prod = await calc_order.load_production(true);
-    const res = {number_doc: calc_order.number_doc};
+    const result = {number_doc: calc_order.number_doc};
 
-    const {query} = url.parse(ctx.req.url);
-    let prms, builder_props;
-    if(query && query.length > 3) {
-      prms = qs.parse(query.replace('?',''));
-      if(prms.builder_props) {
-        try{
-          builder_props = JSON.parse(prms.builder_props);
-        }
-        catch(err){}
+    let builder_props;
+    if(query.builder_props) {
+      try{
+        builder_props = JSON.parse(query.builder_props);
       }
+      catch(err){}
     }
 
-    const format = prms && prms.hasOwnProperty('format') ? (prms.format ? prms.format.split(',') : []) : ['png'];
+    const format = query && query.hasOwnProperty('format') ? (query.format ? query.format.split(',') : []) : ['png'];
 
-    if(prms && prms.hasOwnProperty('glasses')) {
+    if(query && query.hasOwnProperty('glasses')) {
       const {project, view} = editor;
-      await glasses({project, view, prod, res, builder_props, format});
+      await glasses({project, view, prod, res: result, builder_props, format});
     }
     else{
       let counter = 8;
@@ -84,7 +82,7 @@ module.exports = function($p, log) {
 
           const {_obj} = ox;
           const ref = $p.utils.snake_ref(ox.ref);
-          res[ref] = {
+          result[ref] = {
             constructions: _obj.constructions || [],
             coordinates: _obj.coordinates || [],
             specification: _obj.specification ? _obj.specification.map((o) => {
@@ -129,20 +127,20 @@ module.exports = function($p, log) {
             await project.load(ox, builder_props || true)
               .then(() => {
                 if(format.includes('png')) {
-                  res[ref].imgs.l0 = view.element.toBuffer().toString('base64');
+                  result[ref].imgs.l0 = view.element.toBuffer().toString('base64');
                 }
                 if(format.includes('svg')) {
-                  res[ref].imgs.s0 = project.get_svg();
+                  result[ref].imgs.s0 = project.get_svg();
                 }
               })
               .then(() => {
                 ox.constructions.forEach(({cnstr}) => {
                   project.draw_fragment({elm: -cnstr});
                   if(format.includes('png')) {
-                    res[ref].imgs[`l${cnstr}`] = view.element.toBuffer().toString('base64');
+                    result[ref].imgs[`l${cnstr}`] = view.element.toBuffer().toString('base64');
                   }
                   if(format.includes('svg')) {
-                    res[ref].imgs[`s${cnstr}`] = project.get_svg();
+                    result[ref].imgs[`s${cnstr}`] = project.get_svg();
                   }
                 });
               })
@@ -151,13 +149,13 @@ module.exports = function($p, log) {
                   const glass = project.draw_fragment({elm});
                   // подтянем формулу стеклопакета
                   if(format.includes('png')) {
-                    res[ref].imgs[`g${elm}`] = view.element.toBuffer().toString('base64');
+                    result[ref].imgs[`g${elm}`] = view.element.toBuffer().toString('base64');
                   }
                   if(format.includes('svg')) {
-                    res[ref].imgs[`sg${elm}`] = project.get_svg();
+                    result[ref].imgs[`sg${elm}`] = project.get_svg();
                   }
                   if(glass){
-                    res[ref].glasses[row - 1].formula = glass.formula(true);
+                    result[ref].glasses[row - 1].formula = glass.formula(true);
                     glass.visible = false;
                   }
                 });
@@ -175,7 +173,7 @@ module.exports = function($p, log) {
       }
     }
 
-    ctx.body = res;
+    res.end(JSON.stringify(result));
 
     Promise.resolve()
       .then(() => {
@@ -196,12 +194,12 @@ module.exports = function($p, log) {
   }
 
   // формирует массив эскизов по параметрам запроса
-  async function array(ctx, next) {
+  async function array(req, res) {
 
     // отсортировать по заказам и изделиям
     const prms = JSON.parse(ctx.params.ref);
     const grouped = $p.wsql.alasql('SELECT calc_order, product, elm FROM ? GROUP BY ROLLUP(calc_order, product, elm)', [prms]);
-    const res = [];
+    const result = [];
     const {project, view} = new $p.Editor();
 
     function builder_props({calc_order, product}) {
@@ -256,7 +254,7 @@ module.exports = function($p, log) {
         project.draw_fragment({elm: img.elm});
       }
 
-      res.push({
+      result.push({
         calc_order: img.calc_order,
         product: img.product,
         elm: img.elm,
@@ -267,47 +265,39 @@ module.exports = function($p, log) {
     calc_order && calc_order.unload();
     ox && ox.unload();
 
-    ctx.body = res;
+    ctx.body = result;
 
   }
 
   // формирует единичный эскиз по параметрам запроса
-  async function png(ctx, next) {
+  async function png(req, res) {
 
   }
 
   // формирует единичный эскиз по параметрам запроса
-  async function svg(ctx, next) {
+  async function svg(req, res) {
 
   }
 
-  return async (ctx, next) => {
+  return async (req, res) => {
 
-    // контролируем загруженность справочников
-    if(!$p.job_prm.complete_loaded) {
-      ctx.status = 403;
-      ctx.body = 'loading to ram, wait 1 minute';
-      return;
-    }
+    const {getBody, end} = $p.utils;
+    const {parsed: {paths}, method} = req;
 
     // контролируем водопад
-    if(!$p.hasOwnProperty('queue')) {
-      $p.queue = 0;
-    }
-    $p.queue++;
-    const start = Date.now();
-
-    const fin = () => {
-      $p.queue--;
-      // log({
-      //   start,
-      //   duaration: Date.now() - start,
-      // });
-    }
-
-    // проверяем ограничение по ip и авторизацию
-    await auth(ctx, $p)
-      .catch(() => null);
+    // if(!$p.hasOwnProperty('queue')) {
+    //   $p.queue = 0;
+    // }
+    // $p.queue++;
+    // const start = Date.now();
+    //
+    // const fin = () => {
+    //   $p.queue--;
+    //   log({
+    //     start,
+    //     duaration: Date.now() - start,
+    //   });
+    // }
 
     // log({
     //   start,
@@ -317,29 +307,23 @@ module.exports = function($p, log) {
     //   queue: $p.queue,
     // });
 
-    if(!ctx._auth) {
-      return;
-    }
 
     try{
-      switch (ctx.params.class){
+      switch (paths[2]){
       case 'doc.calc_order':
-        return await prod(ctx, next).then(fin);
+        return await prod(req, res);
       case 'array':
-        return await array(ctx, next).then(fin);
+        return await array(req, res);
       case 'png':
-        return await png(ctx, next).then(fin);
+        return await png(req, res);
       case 'svg':
-        return await svg(ctx, next).then(fin);
-      default:
-        fin();
+        return await svg(req, res);
+      // default:
+      //   fin();
       }
     }
     catch(err){
-      fin();
-      ctx.status = 500;
-      ctx.body = err.stack;
-      log(err);
+      end.end500({res, err, log})
     }
 
   };
