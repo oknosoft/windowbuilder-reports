@@ -14,13 +14,10 @@
     "LICENSE.ru.md"
   ],
   "scripts": {
-    "canvas": "apt-get install libcairo2-dev libjpeg62-turbo-dev libpango1.0-dev libgif-dev build-essential g++",
-    "meta:link": "node ./scripts/meta.link"
+    "canvas": "apt-get install libcairo2-dev libjpeg62-turbo-dev libpango1.0-dev libgif-dev build-essential g++"
   },
   "dependencies": {},
-  "devDependencies": {
-    "md5-file": "^5.0"
-  },
+  "devDependencies": {},
   "homepage": "http://www.oknosoft.ru/zd/",
   "repository": {
     "type": "git",
