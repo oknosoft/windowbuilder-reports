@@ -17,18 +17,9 @@
     "canvas": "apt-get install libcairo2-dev libjpeg62-turbo-dev libpango1.0-dev libgif-dev build-essential g++",
     "meta:link": "node ./scripts/meta.link"
   },
-  "dependencies": {
-    "canvas": "^2.6.1",
-    "metadata-abstract-ui": "2.0.23-beta.2",
-    "metadata-core": "2.0.23-beta.2",
-    "metadata-postgres": "2.0.23-beta.2",
-    "metadata-pouchdb": "2.0.23-beta.2",
-    "paper-jsdom-canvas": "0.12.8",
-    "windowbuilder": "github:oknosoft/windowbuilder-core#db978c95be111d19c4e2e8811867d46853fd8338"
-  },
+  "dependencies": {},
   "devDependencies": {
-    "md5-file": "^5.0",
-    "node-fetch": "^2.6.0"
+    "md5-file": "^5.0"
   },
   "homepage": "http://www.oknosoft.ru/zd/",
   "repository": {
