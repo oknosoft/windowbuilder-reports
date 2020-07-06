@@ -7,7 +7,7 @@
  */
 
 module.exports = function accumulation({adapters, accumulation}) {
-  accumulation.init({
+  return accumulation.init({
     dbs: [
       adapters.pouch.remote.doc,
     ],

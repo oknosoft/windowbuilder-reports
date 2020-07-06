@@ -3,7 +3,7 @@
 
 module.exports = function reports($p, log) {
 
-  const executer = require('./windowbuilder')($p, log);
+  const windowbuilder = require('./windowbuilder')($p, log);
   const search  = require('./search')($p, log);
   const acc_get  = require('./accumulation/get')($p, log);
   const acc_post  = require('./accumulation/post')($p, log);
@@ -13,7 +13,7 @@ module.exports = function reports($p, log) {
     const {query, path, paths} = req.parsed;
 
     if (paths[1] === 'img' || paths[3] === 'img') {
-      return reports(req, res);
+      return windowbuilder(req, res);
     }
 
     if (req.method === 'POST' && (paths[1] === '_find' || paths[3] === '_find')) {
