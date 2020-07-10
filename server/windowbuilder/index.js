@@ -1,5 +1,3 @@
-const url = require('url');
-const qs = require('qs');
 
 module.exports = function($p, log) {
 
@@ -323,7 +321,7 @@ module.exports = function($p, log) {
       }
     }
     catch(err){
-      end.end500({res, err, log})
+      end.end500({res, err, log});
     }
 
   };
