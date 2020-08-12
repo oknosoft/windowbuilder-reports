@@ -195,7 +195,7 @@ module.exports = function($p, log) {
   async function array(req, res) {
 
     // отсортировать по заказам и изделиям
-    const prms = JSON.parse(ctx.params.ref);
+    const prms = JSON.parse(decodeURIComponent(req.parsed.paths[3]));
     const grouped = $p.wsql.alasql('SELECT calc_order, product, elm FROM ? GROUP BY ROLLUP(calc_order, product, elm)', [prms]);
     const result = [];
     const {project, view} = new $p.Editor();
@@ -263,7 +263,7 @@ module.exports = function($p, log) {
     calc_order && calc_order.unload();
     ox && ox.unload();
 
-    ctx.body = result;
+    res.end(JSON.stringify(result));
 
   }
 
