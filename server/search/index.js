@@ -7,25 +7,6 @@
  */
 
 
-function json(ctx) {
-  return new Promise((resolve, reject) => {
-    let rawData = '';
-    ctx.req.on('data', (chunk) => { rawData += chunk; });
-    ctx.req.on('end', () => {
-      try {
-        resolve(ctx._json = JSON.parse(rawData));
-      }
-      catch (err) {
-        ctx.status = 500;
-        ctx.body = err.message;
-        reject(err);
-      }
-    });
-  });
-}
-
-
-
 module.exports = function($p, log) {
 
   // const indexer = require('./indexer')($p);
@@ -33,24 +14,13 @@ module.exports = function($p, log) {
   //   log(`indexed ${page.indexer._count} ${page.bookmark.substr(10, 30)}`);
   // });
 
-  return async (ctx, next) => {
+  const {getBody} = $p.utils;
 
-    // проверяем ограничение по ip и авторизацию
-    await auth(ctx, $p)
-      .then(() => json(ctx))
-      .catch(() => null);
+  return async (req, res) => {
 
-    if(ctx._json && ctx._auth) {
-      try{
-        ctx.body = await $p.accumulation.find(ctx._json, ctx._auth);
-        ctx.status = 200;
-      }
-      catch(err){
-        ctx.status = err.status || 500;
-        ctx.body = err.message;
-        console.error(err);
-      }
-    }
+    const body = await getBody(req);
+    const rows = await $p.accumulation.find(body, req.user);
+    res.end(JSON.stringify(rows));
 
   }
 }
