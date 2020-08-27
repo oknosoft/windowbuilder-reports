@@ -19,7 +19,8 @@ module.exports = function($p, log) {
   return async (req, res) => {
 
     const body = await getBody(req);
-    const rows = await $p.accumulation.find(body, req.user);
+    const selector = JSON.parse(body);
+    const rows = await $p.accumulation.find(selector, req.user);
     res.end(JSON.stringify(rows));
 
   }
