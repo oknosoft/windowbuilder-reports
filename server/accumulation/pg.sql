@@ -52,6 +52,7 @@ BEGIN
    NEW.fts= setweight(to_tsvector(number_doc_str(NEW.number_doc)),'A')
 	|| setweight(to_tsvector(NEW.number_internal),'A')
 	|| setweight(to_tsvector(NEW.note), 'B')
+	|| setweight(to_tsvector(NEW.shipping_address), 'B')
 	|| setweight(to_tsvector(phone_str(NEW.phone)), 'B')
 	|| setweight(to_tsvector(NEW.client_of_dealer), 'B');
  RETURN NEW;
@@ -69,7 +70,7 @@ ALTER FUNCTION public.calc_order_fts() OWNER TO postgres;
 CREATE FUNCTION public.number_doc_str(number_doc text) RETURNS text
     LANGUAGE plpgsql
     AS $$
-declare 
+declare
 	tmp text[];
 	pos text;
 begin
@@ -99,7 +100,7 @@ declare tmp text;
 begin
 	tmp = replace(phone, '-', '');
 	tmp = replace(tmp, '(', '');
-	tmp = replace(tmp, ')', '');	
+	tmp = replace(tmp, ')', '');
 	tmp = replace(tmp, ' ', '');
 	tmp = replace(tmp, ',', ' ');
     RETURN tmp;
