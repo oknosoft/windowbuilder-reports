@@ -45,7 +45,7 @@ module.exports = function($p, log) {
     const {nom} = $p.cat;
     const calc_order = await $p.doc.calc_order.get(paths[3], 'promise');
     const prod = await calc_order.load_production(true);
-    const result = {number_doc: calc_order.number_doc};
+    const result = {number_doc: calc_order.number_doc, planning: calc_order.planning.toJSON()};
 
     let builder_props;
     if(query.builder_props) {

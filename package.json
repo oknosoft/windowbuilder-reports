@@ -1,7 +1,7 @@
 {
   "name": "windowbuilder-reports",
   "description": "Reports and image rendering for windowbuilder project",
-  "version": "2.0.255",
+  "version": "2.0.256",
   "author": "Evgeniy Malyarov <info@oknosoft.ru> (http://www.oknosoft.ru)",
   "license": "SEE LICENSE IN LICENSE.en.md",
   "engines": {
