@@ -7,7 +7,8 @@
  */
 
 module.exports = function accumulation({adapters, accumulation}) {
-  return accumulation.init({
+
+  return process.env.PGPASSWORD ? accumulation.init({
     dbs: [
       adapters.pouch.remote.doc,
     ],
@@ -21,5 +22,6 @@ module.exports = function accumulation({adapters, accumulation}) {
       require('./calculations_credit')('doc.credit_card_order'),  // оплата картой
       require('./calculations_credit')('doc.debit_bank_order'),   // банк приход
     ]
-  });
+  })
+    : Promise.resolve();
 };
