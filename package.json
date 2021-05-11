@@ -13,6 +13,7 @@
     "LICENSE",
     "LICENSE.ru.md"
   ],
+  "main": "server/index.js",
   "scripts": {
     "canvas": "apt-get install libcairo2-dev libjpeg62-turbo-dev libpango1.0-dev libgif-dev build-essential g++"
   },

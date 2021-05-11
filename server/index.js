@@ -1,7 +1,7 @@
 
 // app.restrict_ips = process.env.IPS ? process.env.IPS.split(',') : [];
 
-module.exports = function reports($p, log) {
+module.exports = function reports($p, log, route = {}) {
 
   const windowbuilder = require('./windowbuilder')($p, log);
   const search  = require('./search')($p, log);
@@ -9,7 +9,7 @@ module.exports = function reports($p, log) {
   const acc_post  = require('./accumulation/post')($p, log);
   const acc_delete  = require('./accumulation/delete')($p, log);
 
-  return async function reportsHandler(req, res) {
+  route.r = async function reportsHandler(req, res) {
     const {query, path, paths} = req.parsed;
 
     if (paths[1] === 'img' || paths[3] === 'img') {
@@ -34,5 +34,7 @@ module.exports = function reports($p, log) {
     //   .delete('/postgres/:db/:path', acc_delete);
 
   }
+
+  return route.r;
 }
 
