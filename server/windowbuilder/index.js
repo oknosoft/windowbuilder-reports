@@ -108,8 +108,9 @@ module.exports = function($p, log) {
               }
               return Object.assign(o, dop);
             }) : [],
-            glasses: _obj.glasses,
-            params: _obj.params,
+            glasses: _obj.glasses || [],
+            glass_specification: _obj.glass_specification || [],
+            params: _obj.params || [],
             clr: _obj.clr,
             sys: _obj.sys,
             x: _obj.x,
@@ -285,29 +286,6 @@ module.exports = function($p, log) {
 
     const {getBody, end} = $p.utils;
     const {parsed: {paths}, method} = req;
-
-    // контролируем водопад
-    // if(!$p.hasOwnProperty('queue')) {
-    //   $p.queue = 0;
-    // }
-    // $p.queue++;
-    // const start = Date.now();
-    //
-    // const fin = () => {
-    //   $p.queue--;
-    //   log({
-    //     start,
-    //     duaration: Date.now() - start,
-    //   });
-    // }
-
-    // log({
-    //   start,
-    //   ip: ctx.req.headers['x-real-ip'] || ctx.ip,
-    //   url: ctx.req.url,
-    //   auth: ctx._auth && ctx._auth.username,
-    //   queue: $p.queue,
-    // });
 
 
     try{
