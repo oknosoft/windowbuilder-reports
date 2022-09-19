@@ -2,7 +2,7 @@
   "name": "windowbuilder-reports",
   "description": "Reports and image rendering for windowbuilder project",
   "version": "2.1.259",
-  "author": "Evgeniy Malyarov <info@oknosoft.ru> (http://www.oknosoft.ru)",
+  "author": "Evgeniy Malyarov <info@oknosoft.ru> (https://oknosoft.ru)",
   "license": "SEE LICENSE IN LICENSE.en.md",
   "files": [
     "server/**",
@@ -12,7 +12,7 @@
   "main": "server/index.js",
   "dependencies": {},
   "devDependencies": {},
-  "homepage": "http://www.oknosoft.ru/zd/",
+  "homepage": "https://oknosoft.ru/zd/",
   "repository": {
     "type": "git",
     "url": "https://github.com/oknosoft/windowbuilder-reports.git"

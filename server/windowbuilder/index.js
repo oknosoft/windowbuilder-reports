@@ -125,6 +125,13 @@ module.exports = function($p, log) {
             imgs: {},
           }._clone();
 
+          if(ox.origin.insert_type.is('mosquito')) {
+            const tmp = await ox.draw({res: new Map(), builder_props, format}, editor);
+            Object.assign(result[ref], tmp.get(ox));
+            ox._data._modified = false;
+            ox.unload();
+          }
+
           if(_obj.coordinates && _obj.coordinates.length){
 
             await project.load(ox, builder_props || true)
