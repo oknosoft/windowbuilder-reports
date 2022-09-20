@@ -70,18 +70,6 @@ module.exports = function($p, log) {
       for(const ox of prod){
 
         try {
-          counter--;
-          if(counter < 0) {
-            counter = 8;
-            editor.unload();
-            editor = new $p.Editor();
-          }
-          const {project, view} = editor;
-          // project.draw_fragment({elm: -1});
-          // view.update();
-          // ctx.type = 'image/png';
-          // ctx.body = return view.element.toBuffer();
-
           const {_obj} = ox;
           const ref = $p.utils.snake_ref(ox.ref);
           result[ref] = {
@@ -126,13 +114,23 @@ module.exports = function($p, log) {
           }._clone();
 
           if(ox.origin.insert_type.is('mosquito')) {
-            const tmp = await ox.draw({res: new Map(), builder_props, format}, editor);
+            const tmp = await ox.draw({res: new Map(), builder_props, format, keep_editor: true}, editor);
             Object.assign(result[ref], tmp.get(ox));
-            ox._data._modified = false;
-            ox.unload();
           }
 
           if(_obj.coordinates && _obj.coordinates.length){
+
+            counter--;
+            if(counter < 0) {
+              counter = 8;
+              editor.unload();
+              editor = new $p.Editor();
+            }
+            const {project, view} = editor;
+            // project.draw_fragment({elm: -1});
+            // view.update();
+            // ctx.type = 'image/png';
+            // ctx.body = return view.element.toBuffer();
 
             await project.load(ox, builder_props || true)
               .then(() => {
@@ -176,6 +174,7 @@ module.exports = function($p, log) {
                 ox.unload();
               });
           }
+
         }
         catch(err) {
           err = null;
