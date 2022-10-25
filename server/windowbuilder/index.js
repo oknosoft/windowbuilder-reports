@@ -170,8 +170,8 @@ module.exports = function($p, log) {
               })
               .then(() => {
                 ox._data._modified = false;
+                project.ox = null;
                 project.clear();
-                ox.unload();
               });
           }
 
