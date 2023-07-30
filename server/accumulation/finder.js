@@ -13,12 +13,16 @@ const fields = [
   'date',
   'number_doc',
   'number_internal',
+  'organization',
+  'department',
   'partner',
   'client_of_dealer',
   'manager',
   'doc_amount',
+  'amount_internal',
+  'amount_operation',
   'obj_delivery_state',
-  'department',
+  'category',
   'note'];
 
 function apply_rls($and, branch) {
@@ -186,7 +190,7 @@ module.exports = function (Proto) {
         let scroll;
         const tmp = Math.random().toString().replace('0.', 'tmp');
         return this.client.query(`drop table if exists ${tmp}`)
-          .then(() => this.client.query(`select ref, row_number() OVER (order by date ${sort}) 
+          .then(() => this.client.query(`select ref, row_number() OVER (order by date ${sort})
             INTO temp ${tmp} from ${mgr.table_name} where date between $1 and $2 ${conditions} ${search}`, [dfrom, dtill]))
           .then(() => this.client.query(`select row_number from ${tmp} where ref = '${ref}'`))
           .then((res) => {
@@ -198,7 +202,7 @@ module.exports = function (Proto) {
           })
           .then((res) => {
             const count = parseInt(res.rows[0].count, 10);
-            let sql = `select r.ref, ${fields.filter(v => v !== 'ref').join()} from ${tmp} r 
+            let sql = `select r.ref, ${fields.filter(v => v !== 'ref').join()} from ${tmp} r
             inner join ${mgr.table_name} on r.ref = ${mgr.table_name}.ref
             offset ${skip} limit ${limit}`;
 
