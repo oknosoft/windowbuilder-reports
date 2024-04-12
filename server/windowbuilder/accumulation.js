@@ -8,25 +8,27 @@
 
 module.exports = function accumulation({adapters, accumulation, cat, job_prm}, log) {
 
-  if(process.env.PGPASSWORD && process.env.PGINDEXER) {
+  if(process.env.PGPASSWORD) {
     const dbs = [];
-    const {abonents, branches} = job_prm.server;
-    for(const id of abonents) {
-      const abonent = cat.abonents.by_id(id);
-      if(abonent) {
-        cat.branches.find_rows({owner: abonent, use: true}, (branch) => {
-          if(!branches.length || branches.includes(branch.suffix)) {
-            dbs.push(Object.assign(branch.db('doc'), {abonent, branch}));
-          }
-        });
-        dbs.push(Object.assign(abonent.db('doc'), {abonent, branch: cat.branches.get()}));
-      }
-    }
-    log(`PG indexer starting - ${dbs.map(({name}) => {
-      const index = name.lastIndexOf('/');
-      return name.substring(index+1);
-    }).join(',')}`);
 
+    if(process.env.PGINDEXER) {
+      const {abonents, branches} = job_prm.server;
+      for(const id of abonents) {
+        const abonent = cat.abonents.by_id(id);
+        if(abonent) {
+          cat.branches.find_rows({owner: abonent, use: true}, (branch) => {
+            if(!branches.length || branches.includes(branch.suffix)) {
+              dbs.push(Object.assign(branch.db('doc'), {abonent, branch}));
+            }
+          });
+          dbs.push(Object.assign(abonent.db('doc'), {abonent, branch: cat.branches.get()}));
+        }
+      }
+      log(`PG indexer starting - ${dbs.map(({name}) => {
+        const index = name.lastIndexOf('/');
+        return name.substring(index+1);
+      }).join(',')}`);
+    }
 
     return accumulation.init({
       dbs,
@@ -41,6 +43,7 @@ module.exports = function accumulation({adapters, accumulation, cat, job_prm}, l
         // require('./calculations_credit')('doc.debit_bank_order'),   // банк приход
       ],
       log,
+      listen: process.env.PGINDEXER,
     })
       .then(() => log('PG indexer started'));
   }

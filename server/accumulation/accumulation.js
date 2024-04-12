@@ -31,7 +31,7 @@ class Accumulation extends classes.MetaEventEmitter {
   /**
    * создаёт базу и подключается
    */
-  init({dbs = [], listeners = [], log}) {
+  init({dbs = [], listeners = [], log, listen}) {
     const {Client} = require('pg');
     const conf = {
       user: process.env.PGUSER,
@@ -77,7 +77,7 @@ class Accumulation extends classes.MetaEventEmitter {
       .then(() => this.set_param('date', Date.now()))
       .then(() => {
         this.emit('init');
-        this.execute();
+        listen && this.execute();
       })
       .catch((err) => {
         this.log(err);
