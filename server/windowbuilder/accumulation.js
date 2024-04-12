@@ -39,7 +39,8 @@ module.exports = function accumulation({adapters, accumulation, cat, job_prm}, l
         // require('./calculations_credit')('doc.debit_cash_order'),   // касса приход
         // require('./calculations_credit')('doc.credit_card_order'),  // оплата картой
         // require('./calculations_credit')('doc.debit_bank_order'),   // банк приход
-      ]
+      ],
+      log,
     })
       .then(() => log('PG indexer started'));
   }
