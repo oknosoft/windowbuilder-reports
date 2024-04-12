@@ -8,6 +8,8 @@
 
 const {classes} = require('metadata-core');
 
+const limit = 160;
+
 class Accumulation extends classes.MetaEventEmitter {
 
   constructor($p) {
@@ -17,14 +19,13 @@ class Accumulation extends classes.MetaEventEmitter {
     this.dbs = [];
     // список обработчиков проведения
     this.listeners = [];
-    // интервал опроса и пересчета
-    this.interval = 60000;
-    // указатель на текущий таймер
-    this.timer = 0;
 
     // привязываем контекст
     this.changes = this.changes.bind(this);
+    this.feed = this.feed.bind(this);
     this.execute = this.execute.bind(this);
+    this.reconnect = this.reconnect.bind(this);
+    this.reflect = this.reflect.bind(this);
   }
 
   /**
@@ -49,7 +50,7 @@ class Accumulation extends classes.MetaEventEmitter {
       })
       .then(({rows}) => {
         if(!rows.length) {
-          return client.query(`CREATE DATABASE ${conf.database} WITH 
+          return client.query(`CREATE DATABASE ${conf.database} WITH
             ENCODING = 'UTF8'
             LC_COLLATE = 'ru_RU.UTF-8'
             LC_CTYPE = 'ru_RU.UTF-8'
@@ -110,12 +111,59 @@ class Accumulation extends classes.MetaEventEmitter {
   /**
    * Фильтр для changes по class_name активных listeners
    */
-  changes_selector() {
+  changes_conf(db, live=false) {
     const names = new Set();
     for(const {class_name} of this.listeners) {
       names.add(class_name);
     }
-    return {class_name: {$in: Array.from(names)}};
+    const conf = {
+      include_docs: true,
+      selector: {class_name: {$in: Array.from(names)}},
+      limit,
+      batch_size: limit,
+      live,
+    };
+    return this.get_param(`changes:${db.name}`)
+      .then((since) => {
+        if(since) {
+          conf.since = since;
+        }
+        return conf;
+      });
+  }
+
+  reflect(db, res, conf) {
+    let queue = Promise.resolve();
+    for (const {doc} of res.results) {
+      for (const {class_name, listener} of this.listeners) {
+        if (doc._id.startsWith(class_name + '|')) {
+          queue = queue.then(() => listener(db, this, doc));
+        }
+      }
+    }
+    return queue
+      .then(() => res.last_seq && conf.since !== res.last_seq && this.set_param(`changes:${db.name}`, res.last_seq))
+      .then(() => res);
+  }
+
+  reconnect(db, changes) {
+    changes.cancel();
+    this.$p.utils.sleep(4000)
+      .then(() => this.feed(db));
+  }
+
+  feed(db) {
+    this.changes_conf(db, true)
+      .then((conf) => {
+        const changes = db.changes(conf)
+          .on('change', (change) => {
+            this.reflect(db, {results: [change], last_seq: change.seq}, conf)
+              .catch(() => this.reconnect(db, changes));
+          })
+          .on('error', (err)=> {
+            this.reconnect(db, changes);
+          });
+      });
   }
 
   /**
@@ -123,50 +171,31 @@ class Accumulation extends classes.MetaEventEmitter {
    * @param db
    */
   changes(db) {
-    const limit = 200;
-    const conf = {
-      include_docs: true,
-      selector: this.changes_selector(),
-      limit,
-      batch_size: limit,
-    };
-    return this.get_param(`changes:${db.name}`)
-      .then((since) => {
-        if(since) {
-          conf.since = since;
-        }
-        return db.changes(conf);
-      })
+    return this.changes_conf(db)
+      .then((conf) => db.changes(conf).then((changes) => [changes, conf]))
+      .then(([changes, conf]) => this.reflect(db, changes, conf))
       .then((res) => {
-        let queue = Promise.resolve();
-        for(const {doc} of res.results) {
-          for(const {class_name, listener} of this.listeners) {
-            if(doc._id.startsWith(class_name + '|')) {
-              queue = queue
-                .then(() => listener(db, this, doc).catch((err) => {
-                  console.log(doc._id);
-                  this.emit('err', [err, doc]);
-                }));
-            }
-          }
-        }
-        return queue
-          .then(() => res.last_seq && conf.since !== res.last_seq && this.set_param(`changes:${db.name}`, res.last_seq))
-          .then(() => res.results.length === limit && this.changes(db));
-      });
+        return res.results.length === limit ?
+          this.changes(db) :
+          this.feed(db);
+      })
   }
 
   /**
    * Бежит по всем датабазам, читает изменения и перестраивает индексы
    */
-  execute() {
-    clearTimeout(this.timer);
-    const {changes, execute, dbs, interval} = this;
-    return Promise.all(dbs.map(changes))
-      .catch((err) => this.emit('err', err))
-      .then(() => {
-        this.timer = setTimeout(execute, interval);
-      });
+  async execute() {
+    const {changes, execute, dbs, $p: {utils}} = this;
+    for(const db of dbs) {
+      try {
+        await changes(db);
+      }
+      catch (err) {
+        this.emit('err', err);
+        utils.sleep(20000).then(execute);
+        break;
+      }
+    }
   }
 
   /**

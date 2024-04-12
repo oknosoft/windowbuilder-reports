@@ -21,6 +21,7 @@ module.exports = function($p, log) {
     const body = await getBody(req);
     const selector = JSON.parse(body);
     const rows = await $p.accumulation.find(selector, req.user);
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.end(JSON.stringify(rows));
 
   }

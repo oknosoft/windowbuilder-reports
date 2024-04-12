@@ -2,24 +2,22 @@
 -- PostgreSQL database dump
 --
 
--- Dumped from database version 11.2 (Debian 11.2-1.pgdg90+1)
--- Dumped by pg_dump version 11.2
-
--- Started on 2019-04-18 22:22:29
+-- Dumped from database version 14.11
+-- Dumped by pg_dump version 14.11
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
 SET idle_in_transaction_session_timeout = 0;
 SET client_encoding = 'UTF8';
-SET standard_conforming_strings = on;
+SET standard_conforming_strings = off;
 SELECT pg_catalog.set_config('search_path', '', false);
 SET check_function_bodies = false;
+SET xmloption = content;
 SET client_min_messages = warning;
+SET escape_string_warning = off;
 SET row_security = off;
 
-
 --
--- TOC entry 604 (class 1247 OID 16508)
 -- Name: refs; Type: TYPE; Schema: public; Owner: postgres
 --
 
@@ -41,7 +39,6 @@ CREATE TYPE public.refs AS ENUM (
 ALTER TYPE public.refs OWNER TO postgres;
 
 --
--- TOC entry 207 (class 1255 OID 21199)
 -- Name: calc_order_fts(); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -63,7 +60,6 @@ $$;
 ALTER FUNCTION public.calc_order_fts() OWNER TO postgres;
 
 --
--- TOC entry 206 (class 1255 OID 21198)
 -- Name: number_doc_str(text); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -89,7 +85,6 @@ $$;
 ALTER FUNCTION public.number_doc_str(number_doc text) OWNER TO postgres;
 
 --
--- TOC entry 205 (class 1255 OID 21126)
 -- Name: phone_str(text); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -112,10 +107,9 @@ ALTER FUNCTION public.phone_str(phone text) OWNER TO postgres;
 
 SET default_tablespace = '';
 
-SET default_with_oids = false;
+SET default_table_access_method = heap;
 
 --
--- TOC entry 203 (class 1259 OID 16531)
 -- Name: areg_calculations; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -135,14 +129,13 @@ CREATE TABLE public.areg_calculations (
 ALTER TABLE public.areg_calculations OWNER TO postgres;
 
 --
--- TOC entry 204 (class 1259 OID 19065)
 -- Name: doc_calc_order; Type: TABLE; Schema: public; Owner: postgres
 --
 
 CREATE TABLE public.doc_calc_order (
     ref uuid NOT NULL,
-    _deleted boolean,
-    posted boolean,
+    _deleted boolean DEFAULT false,
+    posted boolean DEFAULT false,
     date timestamp without time zone,
     number_doc character(11) DEFAULT ''::bpchar NOT NULL,
     number_internal character varying(20) DEFAULT ''::character varying NOT NULL,
@@ -177,15 +170,15 @@ CREATE TABLE public.doc_calc_order (
     extra_fields jsonb,
     contact_information jsonb,
     planning jsonb,
-    fts tsvector
+    fts tsvector,
+    branch uuid,
+    abonent uuid
 );
 
 
 ALTER TABLE public.doc_calc_order OWNER TO postgres;
 
-
 --
--- TOC entry 202 (class 1259 OID 16416)
 -- Name: settings; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -197,9 +190,14 @@ CREATE TABLE public.settings (
 
 ALTER TABLE public.settings OWNER TO postgres;
 
+--
+-- Name: calc_order_rls; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX calc_order_rls ON public.doc_calc_order USING btree (date, department, partner) INCLUDE (ref, _deleted, posted, organization, manager, obj_delivery_state, category);
+
 
 --
--- TOC entry 2772 (class 2606 OID 16537)
 -- Name: areg_calculations calculations_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -208,7 +206,6 @@ ALTER TABLE ONLY public.areg_calculations
 
 
 --
--- TOC entry 2776 (class 2606 OID 19077)
 -- Name: doc_calc_order doc_calc_order_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -217,7 +214,6 @@ ALTER TABLE ONLY public.doc_calc_order
 
 
 --
--- TOC entry 2770 (class 2606 OID 16423)
 -- Name: settings settings_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -226,7 +222,6 @@ ALTER TABLE ONLY public.settings
 
 
 --
--- TOC entry 2773 (class 1259 OID 69515)
 -- Name: calc_order_fts; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -234,22 +229,11 @@ CREATE INDEX calc_order_fts ON public.doc_calc_order USING gist (fts);
 
 
 --
--- TOC entry 2774 (class 1259 OID 139455)
--- Name: calc_order_rls; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX calc_order_rls ON public.doc_calc_order USING btree (date, department, partner) INCLUDE (ref, _deleted, posted, organization, manager, obj_delivery_state, category);
-
-
---
--- TOC entry 2777 (class 2620 OID 21200)
 -- Name: doc_calc_order calc_order_fts_update; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
-CREATE TRIGGER calc_order_fts_update BEFORE INSERT OR UPDATE ON public.doc_calc_order FOR EACH ROW EXECUTE PROCEDURE public.calc_order_fts();
+CREATE TRIGGER calc_order_fts_update BEFORE INSERT OR UPDATE ON public.doc_calc_order FOR EACH ROW EXECUTE FUNCTION public.calc_order_fts();
 
-
--- Completed on 2019-04-18 22:22:30
 
 --
 -- PostgreSQL database dump complete

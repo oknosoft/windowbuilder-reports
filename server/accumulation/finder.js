@@ -24,6 +24,7 @@ const fields = [
   'obj_delivery_state',
   'category',
   'note'];
+const blank = '00000000-0000-0000-0000-000000000000';
 
 function apply_rls($and, branch) {
   if(!branch || branch.empty()) return;
@@ -91,7 +92,7 @@ module.exports = function (Proto) {
     find({selector, sort, ref, limit, skip = 0}, {branch}) {
 
       if(!this.client || !this.client._connected) {
-        const err = new Error('Индекс прочитн не полностью, повторите запрос позже');
+        const err = new Error('Индекс прочитан не полностью, повторите запрос позже');
         err.status = 403;
         throw err;
       }
@@ -103,7 +104,6 @@ module.exports = function (Proto) {
       let dfrom, dtill, class_name, search = '', conditions = '';
 
       function truth(fld, cond) {
-        const blank = '00000000-0000-0000-0000-000000000000';
 
         conditions += ' and ';
 

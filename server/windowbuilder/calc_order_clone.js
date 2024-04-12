@@ -10,16 +10,17 @@ const class_name = 'doc.calc_order';
 
 function leftPad(str, len) {
   if(str.length <= len) return str;
-  return str.substr(str.length - len);
+  return str.substring(str.length - len);
 }
 
 module.exports = {
   class_name,
   listener(couch, acc, doc) {
-    const ref = doc._id.substr(15);
-    return acc.client.query(`INSERT INTO doc_calc_order (ref, _deleted, posted, date, number_doc, number_internal, project, organization, partner, client_of_dealer, contract, bank_account, note, manager, leading_manager, department, warehouse, doc_amount, amount_operation, amount_internal, accessory_characteristic, phone, delivery_area, shipping_address, coordinates, address_fields, vat_consider, vat_included, settlements_course, settlements_multiplicity, extra_charge_external, obj_delivery_state, category, production, extra_fields, contact_information, planning) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37)
-      ON CONFLICT (ref) DO UPDATE SET 
+    const ref = doc._id.substring(15);
+    const {branch, abonent} = couch;
+    return acc.client.query(`INSERT INTO doc_calc_order (ref, _deleted, posted, date, number_doc, number_internal, project, organization, partner, client_of_dealer, contract, bank_account, note, manager, leading_manager, department, warehouse, doc_amount, amount_operation, amount_internal, accessory_characteristic, phone, delivery_area, shipping_address, coordinates, address_fields, vat_consider, vat_included, settlements_course, settlements_multiplicity, extra_charge_external, obj_delivery_state, category, production, extra_fields, contact_information, planning, branch, abonent)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39)
+      ON CONFLICT (ref) DO UPDATE SET
         _deleted = EXCLUDED._deleted,
         posted = EXCLUDED.posted,
         date = EXCLUDED.date,
@@ -57,18 +58,18 @@ module.exports = {
         contact_information = EXCLUDED.contact_information,
         planning = EXCLUDED.planning;`, [
       ref,
-      doc._deleted,
-      doc.posted,
+      doc._deleted || false,
+      doc.posted || false,
       doc.date,
       leftPad(doc.number_doc || '', 11),
-      (doc.number_internal || '').substr(0,20),
+      (doc.number_internal || '').substring(0,20),
       doc.project,
       doc.organization,
       doc.partner,
-      (doc.client_of_dealer || '').substr(0,255),
+      (doc.client_of_dealer || '').substring(0,255),
       doc.contract,
       doc.bank_account,
-      (doc.note || '').substr(0,255),
+      (doc.note || '').substring(0,255),
       doc.manager,
       doc.leading_manager,
       doc.department,
@@ -77,9 +78,9 @@ module.exports = {
       doc.amount_operation > 1e11 ? 1e11 : doc.amount_operation,
       doc.amount_internal > 1e11 ? 1e11 : doc.amount_internal,
       doc.accessory_characteristic,
-      (doc.phone || '').substr(0,255),
+      (doc.phone || '').substring(0,255),
       doc.delivery_area,
-      (doc.shipping_address || '').substr(0,255),
+      (doc.shipping_address || '').substring(0,255),
       doc.coordinates,
       doc.address_fields,
       doc.vat_consider,
@@ -92,7 +93,10 @@ module.exports = {
       {rows: doc.production || []},
       {rows: doc.extra_fields || []},
       {rows: doc.contact_information || []},
-      {rows: doc.planning || []}]);
+      {rows: doc.planning || []},
+      doc.branch || branch.ref,
+      abonent.ref,
+    ]);
   }
 }
 

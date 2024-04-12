@@ -19,20 +19,6 @@ module.exports = function reports($p, log, route = {}) {
     if (req.method === 'POST' && (paths[1] === '_find' || paths[3] === '_find')) {
       return search(req, res);
     }
-
-    // rep.loadMethods()
-    //   .get('/', async (ctx, next) => {
-    //     await next();
-    //     ctx.body = `Reports: try out <a href="/r/img">/r/img</a> too`
-    //   })
-    //   .get('/img/:class/:ref', executer)
-    //   .get('/postgres/:db', acc_get)
-    //   .get('/postgres/:db/:path', acc_get)
-    //   .post('/postgres/:db/:path', acc_post)
-    //   .post('/_find', search)
-    //   .delete('/postgres/:db', acc_delete)
-    //   .delete('/postgres/:db/:path', acc_delete);
-
   }
 
   return route.r;
