@@ -17,7 +17,7 @@ module.exports = function accumulation({adapters, accumulation, cat, job_prm}, l
         const abonent = cat.abonents.by_id(id);
         if(abonent) {
           cat.branches.find_rows({owner: abonent, use: true}, (branch) => {
-            if(!branches.length || branches.includes(branch.suffix)) {
+            if(!branches?.length || branches.includes(branch.suffix)) {
               dbs.push(Object.assign(branch.db('doc'), {abonent, branch}));
             }
           });
