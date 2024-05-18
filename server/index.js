@@ -8,6 +8,7 @@ module.exports = function reports($p, log, route = {}) {
   const acc_get  = require('./accumulation/get')($p, log);
   const acc_post  = require('./accumulation/post')($p, log);
   const acc_delete  = require('./accumulation/delete')($p, log);
+  const partners  = require('./partners')($p, log);
 
   route.r = async function reportsHandler(req, res) {
     const {query, path, paths} = req.parsed;
@@ -15,7 +16,9 @@ module.exports = function reports($p, log, route = {}) {
     if (paths[1] === 'img' || paths[3] === 'img') {
       return windowbuilder(req, res);
     }
-
+    if (paths[1] === 'partners' || paths[3] === 'partners') {
+      return partners(req, res);
+    }
     if (req.method === 'POST' && (paths[1] === '_find' || paths[3] === '_find')) {
       return search(req, res);
     }
