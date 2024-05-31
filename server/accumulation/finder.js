@@ -105,41 +105,43 @@ module.exports = function (Proto) {
 
       function truth(fld, cond) {
 
-        conditions += ' and ';
-
         if(cond === true || (cond && cond.hasOwnProperty('$ne') && !cond.$ne)) {
-          conditions += `${fld} = true`;
+          conditions += ` and ${fld} = true`;
         }
         else if(cond === false || (cond && cond.hasOwnProperty('$ne') && cond.$ne && typeof cond.$ne === 'boolean')) {
-          conditions += `${fld} = false`;
+          conditions += ` and ${fld} = false`;
         }
-        else if(cond && cond.hasOwnProperty('filled')) {
-          conditions += `${fld} is not null and ${fld} != ${blank}`;
+        else if(cond?.hasOwnProperty('filled')) {
+          conditions += ` and ${fld} is not null and ${fld} != ${blank}`;
         }
-        else if(cond && cond.hasOwnProperty('nfilled')) {
-          conditions += `(${fld} is null or ${fld} = ${blank})`;
+        else if(cond?.hasOwnProperty('nfilled')) {
+          conditions += ` and (${fld} is null or ${fld} = ${blank})`;
         }
-        else if(cond && cond.hasOwnProperty('$ne')) {
-          conditions += `${fld} != ${cond.$ne}`;
+        else if(cond?.hasOwnProperty('$ne')) {
+          conditions += ` and ${fld} != ${cond.$ne}`;
         }
-        else if(cond && cond.hasOwnProperty('$in')) {
-          const acond = typeof cond.$in === 'string' ? cond.$in.split(',').map((v) => v.trim()) : cond.$in;
-          conditions += `${fld} in (${acond.map(v => typeof v !== 'string' || v[0] === `'` || v[0] === `"` ? v : `'${v}'`).join()})`;
+        else if(cond?.hasOwnProperty('$in')) {
+          const acond = (typeof cond.$in === 'string' ? cond.$in.split(',').map((v) => v.trim()) : cond.$in).filter(v => v);
+          if(acond.length) {
+            conditions += ` and ${fld} in (${acond.map(v => typeof v !== 'string' || v[0] === `'` || v[0] === `"` ? v : `'${v}'`).join()})`;
+          }
         }
-        else if(cond && cond.hasOwnProperty('$nin')) {
-          const acond = typeof cond.$nin === 'string' ? cond.$nin.split(',').map((v) => v.trim()) : cond.$nin;
-          conditions += `${fld} not in (${acond.map(v => typeof v !== 'string' || v[0] === `'` || v[0] === `"` ? v : `'${v}'`).join()})`;
+        else if(cond?.hasOwnProperty('$nin')) {
+          const acond = (typeof cond.$nin === 'string' ? cond.$nin.split(',').map((v) => v.trim()) : cond.$nin).filter(v => v);
+          if(acond.length) {
+            conditions += ` and ${fld} not in (${acond.map(v => typeof v !== 'string' || v[0] === `'` || v[0] === `"` ? v : `'${v}'`).join()})`;
+          }
         }
-        else if(cond && cond.hasOwnProperty('$eq')) {
+        else if(cond?.hasOwnProperty('$eq')) {
           if(typeof cond.$eq === 'string') {
-            conditions += `${fld} = '${cond.$eq}'`;
+            conditions += ` and ${fld} = '${cond.$eq}'`;
           }
           else if(typeof cond.$eq === 'number') {
-            conditions += `${fld} = ${cond.$eq}`;
+            conditions += ` and ${fld} = ${cond.$eq}`;
           }
         }
         else {
-          conditions += `${fld} = ${cond}`;
+          conditions += ` and ${fld} = ${cond}`;
         }
       }
 
