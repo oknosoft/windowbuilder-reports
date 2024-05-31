@@ -52,8 +52,13 @@ module.exports = function($p, log) {
               contract_kind: "СПокупателем",
               settlements_currency: job_prm.pricing?.main_currency?.ref,
             }, false, true);
+            if(organization.individual_legal.is('ЮрЛицо')) {
+              contract.vat_consider = true;
+              contract.vat_included = true;
+            }
             partner.main_contract = contract;
           }
+          await partner.save();
           res.end(JSON.stringify(partner));
         }
       }
