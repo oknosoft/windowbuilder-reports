@@ -1,6 +1,6 @@
 
 module.exports = function($p, log) {
-  const {utils: {getBody, end}, job_prm, cat: {partners, contracts}} = $p;
+  const {utils: {getBody, end}, job_prm, cat: {partners, contracts}, adapters: {pouch}} = $p;
 
   return async (req, res) => {
 
@@ -58,8 +58,10 @@ module.exports = function($p, log) {
             }
             partner.main_contract = contract;
           }
-          await partner.save();
-          res.end(JSON.stringify(partner));
+          const _obj = partner.toJSON();
+          const {_manager, _data, ref, class_name} = this;
+          await pouch.save_obj({_obj, _manager, _data, ref, class_name, is_new() {}, _set_loaded() {}}, {});
+          res.end(JSON.stringify(_obj));
         }
       }
       else {
