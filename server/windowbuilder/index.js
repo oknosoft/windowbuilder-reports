@@ -154,6 +154,12 @@ module.exports = function($p, log) {
               })
               .then(() => {
                 ox.glasses.forEach(({row, elm}) => {
+                  // заполнения разрывов пропускаем
+                  const ec = ox.coordinates.find({elm});
+                  const cns = ox.constructions.find({cnstr: ec?.cnstr});
+                  if(cns?.kind === 4) {
+                    return;
+                  }
                   const glass = project.draw_fragment({elm});
                   // подтянем формулу стеклопакета
                   if(format.includes('png')) {
