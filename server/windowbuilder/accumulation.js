@@ -45,7 +45,7 @@ module.exports = function accumulation({adapters, accumulation, cat, job_prm}, l
       log,
       listen: process.env.PGINDEXER,
     })
-      .then(() => log('PG indexer started'));
+      .then(() => log(`PG indexer started and listen '${dbs.length}' bases`));
   }
   else {
     log('PG indexer skipped');
