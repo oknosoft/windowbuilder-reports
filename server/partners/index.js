@@ -59,7 +59,7 @@ module.exports = function($p, log) {
             partner.main_contract = contract;
           }
           const _obj = partner.toJSON();
-          const {_manager, _data, ref, class_name} = this;
+          const {_manager, _data, ref, class_name} = partner;
           await pouch.save_obj({_obj, _manager, _data, ref, class_name, is_new() {}, _set_loaded() {}}, {});
           res.end(JSON.stringify(_obj));
         }
