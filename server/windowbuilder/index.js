@@ -1,6 +1,8 @@
 
 module.exports = function($p, log) {
 
+  const redraw = {redraw: true};
+
   // формирует структуру с эскизами заполнений
   async function glasses({project, view, prod, res, builder_props, format}) {
     for(const ox of prod){
@@ -14,7 +16,7 @@ module.exports = function($p, log) {
       };
 
       if(coordinates && coordinates.length){
-        await project.load(ox, builder_props || true);
+        await project.load(ox, Object.assign(builder_props || {}, redraw));
 
         ox.glasses.forEach((row) => {
           const glass = project.draw_fragment({elm: row.elm});
@@ -132,7 +134,7 @@ module.exports = function($p, log) {
             // ctx.type = 'image/png';
             // ctx.body = return view.element.toBuffer();
 
-            await project.load(ox, builder_props || true)
+            await project.load(ox, Object.assign(builder_props || {}, redraw))
               .then(() => {
                 if(format.includes('png')) {
                   result[ref].imgs.l0 = view.element.toBuffer().toString('base64');
@@ -201,7 +203,7 @@ module.exports = function($p, log) {
           catch(err) {
             err = null;
           }
-        };
+        }
         prod.length = 0;
       })
       .catch((err) => null);
@@ -220,10 +222,10 @@ module.exports = function($p, log) {
     function builder_props({calc_order, product}) {
       for(const prm of prms) {
         if(calc_order === prm.calc_order && product === prm.product) {
-          return prm.builder_props || true;
+          return Object.assign(prm.builder_props || {}, redraw);
         }
       }
-      return true;
+      return redraw;
     }
 
     let calc_order, ox, fragmented;
