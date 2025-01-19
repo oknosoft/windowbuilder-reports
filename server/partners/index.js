@@ -43,20 +43,25 @@ module.exports = function($p, log) {
             Object.assign(partner, {kpp, ogrn, okpo, name: raw.value, is_buyer: true});
             partner.individual_legal = type === 'LEGAL' ? 'ЮрЛицо' : 'ФизЛицо';
           }
-          if(organization && partner.main_contract.empty()) {
-            const contract = contracts.find({owner: partner.ref, organization}) || contracts.create({
-              owner: partner.ref,
-              organization,
-              name: 'Основной',
-              mutual_settlements: "ПоЗаказам",
-              contract_kind: "СПокупателем",
-              settlements_currency: job_prm.pricing?.main_currency?.ref,
-            }, false, true);
-            if(contract.organization.individual_legal.is('ЮрЛицо')) {
-              contract.vat_consider = true;
-              contract.vat_included = true;
+          if(organization) {
+            let contract = contracts.find({owner: partner.ref, organization});
+            if(!contract) {
+              contract = contracts.create({
+                owner: partner.ref,
+                organization,
+                name: 'Основной',
+                mutual_settlements: "ПоЗаказам",
+                contract_kind: "СПокупателем",
+                settlements_currency: job_prm.pricing?.main_currency?.ref,
+              }, false, true);
+              if(contract.organization.individual_legal.is('ЮрЛицо')) {
+                contract.vat_consider = true;
+                contract.vat_included = true;
+              }
             }
-            partner.main_contract = contract;
+            if(partner.main_contract.empty()) {
+              partner.main_contract = contract;
+            }
           }
           const _obj = partner.toJSON();
           const {_manager, _data, ref, class_name} = partner;
