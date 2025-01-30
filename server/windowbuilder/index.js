@@ -16,7 +16,7 @@ module.exports = function($p, log) {
       };
 
       if(coordinates && coordinates.length){
-        await project.load(ox, Object.assign(builder_props || {}, redraw));
+        await project.load(ox, Object.assign({}, ox.builder_props, builder_props, redraw));
 
         ox.glasses.forEach((row) => {
           const glass = project.draw_fragment({elm: row.elm});
@@ -134,7 +134,7 @@ module.exports = function($p, log) {
             // ctx.type = 'image/png';
             // ctx.body = return view.element.toBuffer();
 
-            await project.load(ox, Object.assign(builder_props || {}, redraw))
+            await project.load(ox, Object.assign({}, ox.builder_props, builder_props, redraw))
               .then(() => {
                 if(format.includes('png')) {
                   result[ref].imgs.l0 = view.element.toBuffer().toString('base64');
