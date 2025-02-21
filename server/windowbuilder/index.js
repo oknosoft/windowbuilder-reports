@@ -1,6 +1,8 @@
 
 module.exports = function($p, log) {
 
+  const {Editor, cat: {nom}, doc, job_prm, utils, wsql} = $p;
+
   const redraw = {redraw: true};
 
   // формирует структуру с эскизами заполнений
@@ -8,7 +10,7 @@ module.exports = function($p, log) {
     for(const ox of prod){
 
       const {_obj: {glasses, coordinates}, name} = ox;
-      const ref = $p.utils.snake_ref(ox.ref);
+      const ref = utils.snake_ref(ox.ref);
       res[ref] = {
         glasses: glasses,
         imgs: {},
@@ -43,9 +45,8 @@ module.exports = function($p, log) {
 
     const {parsed: {paths}, method, query} = req;
 
-    let editor = new $p.Editor();
-    const {nom} = $p.cat;
-    const calc_order = await $p.doc.calc_order.get(paths[3], 'promise');
+    let editor = new Editor();
+    const calc_order = await doc.calc_order.get(paths[3], 'promise');
     const prod = await calc_order.load_production(true);
     const result = {
       number_doc: calc_order.number_doc,
@@ -73,14 +74,14 @@ module.exports = function($p, log) {
 
         try {
           const {_obj} = ox;
-          const ref = $p.utils.snake_ref(ox.ref);
+          const ref = utils.snake_ref(ox.ref);
           result[ref] = {
             constructions: _obj.constructions || [],
             coordinates: _obj.coordinates || [],
             specification: _obj.specification ? _obj.specification.map((o) => {
               const {_row} = o;
               const dop = {article: _row.nom.article};
-              if($p.utils.is_data_obj(_row.origin)){
+              if(utils.is_data_obj(_row.origin)){
                 if(_row.origin.empty()) {
                   dop.origin = undefined;
                 }
@@ -88,7 +89,7 @@ module.exports = function($p, log) {
                   dop.origin = {ref: _row.origin.ref, id: _row.origin.id, name: _row.origin.name, class_name: _row.origin.class_name};
                 }
               }
-              if($p.utils.is_data_obj(_row.specify)){
+              if(utils.is_data_obj(_row.specify)){
                 if(_row.specify.empty()) {
                   dop.specify = undefined;
                 }
@@ -126,7 +127,7 @@ module.exports = function($p, log) {
             if(counter < 0) {
               counter = 8;
               editor.unload();
-              editor = new $p.Editor();
+              editor = new Editor();
             }
             const {project, view} = editor;
             // project.draw_fragment({elm: -1});
@@ -134,17 +135,61 @@ module.exports = function($p, log) {
             // ctx.type = 'image/png';
             // ctx.body = return view.element.toBuffer();
 
+            // является ли изделие составным
+            let compositeRoot, rootLayers;
+            if(ox.leading_product.empty() && job_prm.builder.separate_frame_layers) {
+              const contours = ox.constructions.find_rows({parent: 0}).map(v => v._row);
+              if(contours.length > 1) {
+                let min = Infinity;
+                for(const layer of contours) {
+                  if(layer.cnstr < min) {
+                    min = layer.cnstr;
+                    compositeRoot = layer;
+                  }
+                }
+                rootLayers = [compositeRoot.cnstr];
+                for(const step of [1, 2]) {
+                  for(const layer of ox.constructions) {
+                    if(rootLayers.includes(layer.parent) && !rootLayers.includes(layer.cnstr)) {
+                      rootLayers.push(layer.cnstr);
+                    }
+                  }
+                }
+              }
+            }
+
             await project.load(ox, Object.assign({}, ox.builder_props, builder_props, redraw))
               .then(() => {
-                if(format.includes('png')) {
-                  result[ref].imgs.l0 = view.element.toBuffer().toString('base64');
+                // если это составное изделие, эскизы немного другие
+                if(compositeRoot) {
+                  if(format.includes('png')) {
+                    result[ref].imgs.lc = view.element.toBuffer().toString('base64');
+                  }
+                  if(format.includes('svg')) {
+                    result[ref].imgs.sc = project.get_svg();
+                  }
+                  project.draw_fragment({elm: -rootLayers[0], layers: rootLayers});
+                  if(format.includes('png')) {
+                    result[ref].imgs.l0 = view.element.toBuffer().toString('base64');
+                  }
+                  if(format.includes('svg')) {
+                    result[ref].imgs.s0 = project.get_svg();
+                  }
                 }
-                if(format.includes('svg')) {
-                  result[ref].imgs.s0 = project.get_svg();
+                else {
+                  if(format.includes('png')) {
+                    result[ref].imgs.l0 = view.element.toBuffer().toString('base64');
+                  }
+                  if(format.includes('svg')) {
+                    result[ref].imgs.s0 = project.get_svg();
+                  }
                 }
               })
               .then(() => {
                 ox.constructions.forEach(({cnstr}) => {
+                  if(compositeRoot && !rootLayers.includes(cnstr)) {
+                    return;
+                  }
                   project.draw_fragment({elm: -cnstr});
                   if(format.includes('png')) {
                     result[ref].imgs[`l${cnstr}`] = view.element.toBuffer().toString('base64');
@@ -159,7 +204,7 @@ module.exports = function($p, log) {
                   // заполнения разрывов пропускаем
                   const ec = ox.coordinates.find({elm});
                   const cns = ox.constructions.find({cnstr: ec?.cnstr});
-                  if(cns?.kind === 4) {
+                  if(cns?.kind === 4 || (cns && compositeRoot && !rootLayers.includes(cns.cnstr))) {
                     return;
                   }
                   const glass = project.draw_fragment({elm});
@@ -215,9 +260,9 @@ module.exports = function($p, log) {
 
     // отсортировать по заказам и изделиям
     const prms = JSON.parse(decodeURIComponent(req.parsed.paths[3]));
-    const grouped = $p.wsql.alasql('SELECT calc_order, product, elm FROM ? GROUP BY ROLLUP(calc_order, product, elm)', [prms]);
+    const grouped = wsql.alasql('SELECT calc_order, product, elm FROM ? GROUP BY ROLLUP(calc_order, product, elm)', [prms]);
     const result = [];
-    const {project, view} = new $p.Editor();
+    const {project, view} = new Editor();
 
     function builder_props({calc_order, product}) {
       for(const prm of prms) {
@@ -236,7 +281,7 @@ module.exports = function($p, log) {
           calc_order = null;
         }
         if(img.calc_order){
-          calc_order = await $p.doc.calc_order.get(img.calc_order, 'promise');
+          calc_order = await doc.calc_order.get(img.calc_order, 'promise');
         }
         continue;
       }
@@ -298,7 +343,7 @@ module.exports = function($p, log) {
 
   return async (req, res) => {
 
-    const {getBody, end} = $p.utils;
+    const {getBody, end} = utils;
     const {parsed: {paths}, method} = req;
 
 
