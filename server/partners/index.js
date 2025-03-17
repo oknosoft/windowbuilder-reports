@@ -1,11 +1,12 @@
 
 module.exports = function($p, log) {
-  const {utils: {getBody, end}, job_prm, cat: {partners, contracts}, adapters: {pouch}} = $p;
+  const {utils: {getBody, end}, job_prm, cat: {partners, contracts, contact_information_kinds}, adapters: {pouch}} = $p;
 
   return async (req, res) => {
 
     const {parsed: {paths}, method} = req;
     const inn = paths[2] || paths[4];
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
 
     try{
       if(method === 'GET') {
@@ -25,7 +26,7 @@ module.exports = function($p, log) {
             body: `{"query": "${inn}", "count": 3}`,
           })
           .then((res) => res.json());
-        if(suggestions.length) {
+        if(suggestions?.length) {
           res.end(JSON.stringify(suggestions));
         }
         else {
@@ -42,6 +43,12 @@ module.exports = function($p, log) {
           if(partner.is_new()) {
             Object.assign(partner, {kpp, ogrn, okpo, name: raw.value, is_buyer: true});
             partner.individual_legal = type === 'LEGAL' ? 'ЮрЛицо' : 'ФизЛицо';
+          }
+          if(!partner.contact_information.count() && address.value) {
+            const contact_row = partner.contact_information.add({
+              type: 'Адрес',
+              kind: contact_information_kinds.predefined('ЮрАдресКонтрагента'),
+            });
           }
           if(organization) {
             let contract = contracts.find({owner: partner.ref, organization});
