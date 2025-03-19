@@ -1,4 +1,6 @@
 
+const addressFields = require('./addressFields');
+
 module.exports = function($p, log) {
   const {utils: {getBody, end}, job_prm, cat: {partners, contracts, contact_information_kinds}, adapters: {pouch}} = $p;
 
@@ -45,10 +47,7 @@ module.exports = function($p, log) {
             partner.individual_legal = type === 'LEGAL' ? 'ЮрЛицо' : 'ФизЛицо';
           }
           if(!partner.contact_information.count() && address.value) {
-            const contact_row = partner.contact_information.add({
-              type: 'Адрес',
-              kind: contact_information_kinds.predefined('ЮрАдресКонтрагента'),
-            });
+            partner.contact_information.add(addressFields(address, contact_information_kinds));
           }
           if(organization) {
             let contract = contracts.find({owner: partner.ref, organization});
