@@ -206,6 +206,7 @@ module.exports = function (Proto) {
             const count = parseInt(res.rows[0].count, 10);
             let sql = `select r.ref, ${fields.filter(v => v !== 'ref').join()} from ${tmp} r
             inner join ${mgr.table_name} on r.ref = ${mgr.table_name}.ref
+            order by date ${sort}
             offset ${skip} limit ${limit}`;
 
             return this.client.query(sql)
