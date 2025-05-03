@@ -216,6 +216,9 @@ module.exports = function (Proto) {
           })
           .then((res) => {
             const count = parseInt(res.rows[0].count, 10);
+            if(scroll > (skip + limit) && (scroll / (skip + limit)) < 3) {
+              limit = scroll - skip + 3;
+            }
             let sql = `select r.ref, ${fields.filter(v => v !== 'ref').join()} from ${tmp} r
             inner join ${table_name} on r.ref = ${table_name}.ref
             order by date ${sort}
