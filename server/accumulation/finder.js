@@ -97,11 +97,11 @@ module.exports = function (Proto) {
         throw err;
       }
 
-      const {$and} = selector;
+      let {$and, dfrom, dtill, class_name, search} = selector;
       // если указан отдел абонента, принудительно дополняем селектор
       apply_rls($and, branch);
 
-      let dfrom, dtill, class_name, search = '', conditions = '';
+      let conditions = '';
 
       function truth(fld, cond) {
 
@@ -149,21 +149,7 @@ module.exports = function (Proto) {
       for(const row of $and) {
         const fld = Object.keys(row)[0];
         const cond = Object.keys(row[fld])[0];
-        if(fld === 'date') {
-          if(cond === '$lt' || cond === '$lte') {
-            dtill = row[fld][cond].replace(String.fromCharCode(65520), '');
-          }
-          else if(cond === '$gt' || cond === '$gte') {
-            dfrom = row[fld][cond];
-          }
-        }
-        else if(fld === 'search') {
-          search = (cond ? row[fld][cond] : row[fld]) || '';
-        }
-        else if(fld === 'class_name') {
-          class_name = cond ? row[fld][cond] : row[fld];
-        }
-        else if(fields.includes(fld)) {
+        if(fields.includes(fld)) {
           truth(fld, row[fld]);
         }
       }
@@ -175,14 +161,10 @@ module.exports = function (Proto) {
         sort = 'asc';
       }
 
-      const mgr = this.$p.md.mgr_by_class_name(class_name);
-      if(!mgr) {
-        const err = new Error('Ошибка в class_name селектора запроса');
-        err.status = 403;
-        throw err;
-      }
+      const {md, utils} = this.$p;
+      const {table_name} = md.mgr_by_class_name(class_name);
 
-      let flag = skip === 0 && this.$p.utils.is_guid(ref);
+      let flag = skip === 0 && utils.is_guid(ref);
 
       if(search) {
         search = `and fts @@ websearch_to_tsquery('${search}')`;
@@ -193,7 +175,7 @@ module.exports = function (Proto) {
         const tmp = Math.random().toString().replace('0.', 'tmp');
         return this.client.query(`drop table if exists ${tmp}`)
           .then(() => this.client.query(`select ref, row_number() OVER (order by date ${sort})
-            INTO temp ${tmp} from ${mgr.table_name} where date between $1 and $2 ${conditions} ${search}`, [dfrom, dtill]))
+            INTO temp ${tmp} from ${table_name} where date between $1 and $2 ${conditions} ${search}`, [dfrom, dtill]))
           .then(() => this.client.query(`select row_number from ${tmp} where ref = '${ref}'`))
           .then((res) => {
             if(res.rows.length) {
@@ -205,7 +187,7 @@ module.exports = function (Proto) {
           .then((res) => {
             const count = parseInt(res.rows[0].count, 10);
             let sql = `select r.ref, ${fields.filter(v => v !== 'ref').join()} from ${tmp} r
-            inner join ${mgr.table_name} on r.ref = ${mgr.table_name}.ref
+            inner join ${table_name} on r.ref = ${table_name}.ref
             order by date ${sort}
             offset ${skip} limit ${limit}`;
 
@@ -226,10 +208,10 @@ module.exports = function (Proto) {
           });
       }
 
-      let sql = `select count(*) from ${mgr.table_name} where date between $1 and $2 ${conditions} ${search}`;
+      let sql = `select count(*) from ${table_name} where date between $1 and $2 ${conditions} ${search}`;
       return this.client.query(sql, [dfrom, dtill])
         .then((res) => {
-          sql = `select ${fields.join()} from ${mgr.table_name}
+          sql = `select ${fields.join()} from ${table_name}
            where date between $1 and $2 ${conditions} ${search}
            order by date ${sort}
            offset ${skip} limit ${limit}`;
