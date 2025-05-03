@@ -86,10 +86,89 @@ function apply_rls($and, branch) {
   }
 }
 
+function presentations(query, cat, represents) {
+  return query.then((data) => {
+    if(data && represents) {
+      const presentations = data.presentations =  {};
+      const {partners, users} = cat;
+      for(const {partner, manager} of data.docs) {
+        if(partner && partner !== blank && !presentations[partner]) {
+          const o = partners.get(partner);
+          presentations[partner] = o.name;
+        }
+        if(manager && manager !== blank && !presentations[manager]) {
+          const o = users.get(manager);
+          presentations[manager] = o.name;
+        }
+      }
+    }
+    return data;
+  });
+}
+
+class Conditions {
+  constructor(raw) {
+    this.cond = '';
+    this.expand(raw);
+  }
+
+  truth(fld, cond) {
+
+    if(cond === true || (cond && cond.hasOwnProperty('$ne') && !cond.$ne)) {
+      this.cond += ` and ${fld} = true`;
+    }
+    else if(cond === false || (cond && cond.hasOwnProperty('$ne') && cond.$ne && typeof cond.$ne === 'boolean')) {
+      this.cond += ` and ${fld} = false`;
+    }
+    else if(cond?.hasOwnProperty('filled')) {
+      this.cond += ` and ${fld} is not null and ${fld} != ${blank}`;
+    }
+    else if(cond?.hasOwnProperty('nfilled')) {
+      this.cond += ` and (${fld} is null or ${fld} = ${blank})`;
+    }
+    else if(cond?.hasOwnProperty('$ne')) {
+      this.cond += ` and ${fld} != ${cond.$ne}`;
+    }
+    else if(cond?.hasOwnProperty('$in')) {
+      const acond = (typeof cond.$in === 'string' ? cond.$in.split(',').map((v) => v.trim()) : cond.$in).filter(v => v);
+      if(acond.length) {
+        this.cond += ` and ${fld} in (${acond.map(v => typeof v !== 'string' || v[0] === `'` || v[0] === `"` ? v : `'${v}'`).join()})`;
+      }
+    }
+    else if(cond?.hasOwnProperty('$nin')) {
+      const acond = (typeof cond.$nin === 'string' ? cond.$nin.split(',').map((v) => v.trim()) : cond.$nin).filter(v => v);
+      if(acond.length) {
+        this.cond += ` and ${fld} not in (${acond.map(v => typeof v !== 'string' || v[0] === `'` || v[0] === `"` ? v : `'${v}'`).join()})`;
+      }
+    }
+    else if(cond?.hasOwnProperty('$eq')) {
+      if(typeof cond.$eq === 'string') {
+        this.cond += ` and ${fld} = '${cond.$eq}'`;
+      }
+      else if(typeof cond.$eq === 'number') {
+        this.cond += ` and ${fld} = ${cond.$eq}`;
+      }
+    }
+    else {
+      this.cond += ` and ${fld} = ${cond}`;
+    }
+  }
+
+  expand(raw) {
+    for(const row of raw) {
+      const fld = Object.keys(row)[0];
+      const cond = Object.keys(row[fld])[0];
+      if(fields.includes(fld)) {
+        this.truth(fld, row[fld]);
+      }
+    }
+  }
+}
+
 module.exports = function (Proto) {
   return class Accumulation extends Proto {
 
-    find({selector, sort, ref, limit, skip = 0}, {branch}) {
+    find({selector, sort, ref, limit, skip = 0, represents}, {branch}) {
 
       if(!this.client || !this.client._connected) {
         const err = new Error('Индекс прочитан не полностью, повторите запрос позже');
@@ -98,61 +177,12 @@ module.exports = function (Proto) {
       }
 
       let {$and, dfrom, dtill, class_name, search} = selector;
+
       // если указан отдел абонента, принудительно дополняем селектор
       apply_rls($and, branch);
 
-      let conditions = '';
-
-      function truth(fld, cond) {
-
-        if(cond === true || (cond && cond.hasOwnProperty('$ne') && !cond.$ne)) {
-          conditions += ` and ${fld} = true`;
-        }
-        else if(cond === false || (cond && cond.hasOwnProperty('$ne') && cond.$ne && typeof cond.$ne === 'boolean')) {
-          conditions += ` and ${fld} = false`;
-        }
-        else if(cond?.hasOwnProperty('filled')) {
-          conditions += ` and ${fld} is not null and ${fld} != ${blank}`;
-        }
-        else if(cond?.hasOwnProperty('nfilled')) {
-          conditions += ` and (${fld} is null or ${fld} = ${blank})`;
-        }
-        else if(cond?.hasOwnProperty('$ne')) {
-          conditions += ` and ${fld} != ${cond.$ne}`;
-        }
-        else if(cond?.hasOwnProperty('$in')) {
-          const acond = (typeof cond.$in === 'string' ? cond.$in.split(',').map((v) => v.trim()) : cond.$in).filter(v => v);
-          if(acond.length) {
-            conditions += ` and ${fld} in (${acond.map(v => typeof v !== 'string' || v[0] === `'` || v[0] === `"` ? v : `'${v}'`).join()})`;
-          }
-        }
-        else if(cond?.hasOwnProperty('$nin')) {
-          const acond = (typeof cond.$nin === 'string' ? cond.$nin.split(',').map((v) => v.trim()) : cond.$nin).filter(v => v);
-          if(acond.length) {
-            conditions += ` and ${fld} not in (${acond.map(v => typeof v !== 'string' || v[0] === `'` || v[0] === `"` ? v : `'${v}'`).join()})`;
-          }
-        }
-        else if(cond?.hasOwnProperty('$eq')) {
-          if(typeof cond.$eq === 'string') {
-            conditions += ` and ${fld} = '${cond.$eq}'`;
-          }
-          else if(typeof cond.$eq === 'number') {
-            conditions += ` and ${fld} = ${cond.$eq}`;
-          }
-        }
-        else {
-          conditions += ` and ${fld} = ${cond}`;
-        }
-      }
-
       // извлекаем значения полей фильтра из селектора
-      for(const row of $and) {
-        const fld = Object.keys(row)[0];
-        const cond = Object.keys(row[fld])[0];
-        if(fields.includes(fld)) {
-          truth(fld, row[fld]);
-        }
-      }
+      const conditions = new Conditions($and);
 
       if(sort && sort.length && sort[0][Object.keys(sort[0])[0]] === 'desc' || sort === 'desc') {
         sort = 'desc';
@@ -161,7 +191,7 @@ module.exports = function (Proto) {
         sort = 'asc';
       }
 
-      const {md, utils} = this.$p;
+      const {md, utils, cat} = this.$p;
       const {table_name} = md.mgr_by_class_name(class_name);
 
       let flag = skip === 0 && utils.is_guid(ref);
@@ -173,9 +203,9 @@ module.exports = function (Proto) {
       if(flag) {
         let scroll;
         const tmp = Math.random().toString().replace('0.', 'tmp');
-        return this.client.query(`drop table if exists ${tmp}`)
+        return presentations(this.client.query(`drop table if exists ${tmp}`)
           .then(() => this.client.query(`select ref, row_number() OVER (order by date ${sort})
-            INTO temp ${tmp} from ${table_name} where date between $1 and $2 ${conditions} ${search}`, [dfrom, dtill]))
+            INTO temp ${tmp} from ${table_name} where date between $1 and $2 ${conditions.cond} ${search}`, [dfrom, dtill]))
           .then(() => this.client.query(`select row_number from ${tmp} where ref = '${ref}'`))
           .then((res) => {
             if(res.rows.length) {
@@ -205,14 +235,14 @@ module.exports = function (Proto) {
           .catch((err) => {
             this.client.query(`drop table if exists ${tmp};`);
             this.emit('err', err);
-          });
+          }), cat, represents);
       }
 
-      let sql = `select count(*) from ${table_name} where date between $1 and $2 ${conditions} ${search}`;
-      return this.client.query(sql, [dfrom, dtill])
+      let sql = `select count(*) from ${table_name} where date between $1 and $2 ${conditions.cond} ${search}`;
+      return presentations(this.client.query(sql, [dfrom, dtill])
         .then((res) => {
           sql = `select ${fields.join()} from ${table_name}
-           where date between $1 and $2 ${conditions} ${search}
+           where date between $1 and $2 ${conditions.cond} ${search}
            order by date ${sort}
            offset ${skip} limit ${limit}`;
           const count = parseInt(res.rows[0].count, 10);
@@ -228,7 +258,7 @@ module.exports = function (Proto) {
         })
         .catch((err) => {
           this.emit('err', err);
-        });
+        }), cat, represents);
     }
   }
 };

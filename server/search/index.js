@@ -43,8 +43,8 @@ module.exports = function($p, log) {
     return md.mgr_by_class_name(raw.selector.class_name);
   }
 
-  function local_rows(mgr, raw) {
-    const {selector, sort, ref, limit, skip = 0, fullJSON} = raw;
+  function local_rows(mgr, query) {
+    const {selector, sort, ref, limit, skip = 0, fullJSON} = query;
     const {$and, dfrom, dtill, class_name, search} = selector;
     const select = {};
     if(sort) {
@@ -75,16 +75,16 @@ module.exports = function($p, log) {
   }
 
   return async (req, res) => {
-    const selector = JSON.parse(await getBody(req));
-    const mgr = separate(selector);
+    const queryData = JSON.parse(await getBody(req));
+    const mgr = separate(queryData);
     if(!mgr) {
       const err = new Error('Ошибка в class_name селектора запроса');
       err.status = 403;
       throw err;
     }
     const rows = mgr.metadata().cachable === 'ram' ?
-      local_rows(mgr, selector) :
-      await $p.accumulation.find(selector, req.user);
+      local_rows(mgr, queryData) :
+      await $p.accumulation.find(queryData, req.user);
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.end(JSON.stringify(rows));
 
