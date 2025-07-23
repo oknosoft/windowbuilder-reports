@@ -207,7 +207,11 @@ module.exports = function($p, log) {
                   if(cns && compositeRoot && !rootLayers.includes(cns.cnstr)) {
                     return;
                   }
-                  const glass = project.draw_fragment({elm});
+                  let glass = project.draw_fragment({elm});
+                  if(cns?.kind === 4) {
+                    glass = project.getItem({elm});
+                    glass?.draw_fragment();
+                  }
                   // подтянем формулу стеклопакета
                   if(format.includes('png')) {
                     result[ref].imgs[`g${elm}`] = view.element.toBuffer().toString('base64');
