@@ -201,10 +201,10 @@ module.exports = function($p, log) {
               })
               .then(() => {
                 ox.glasses.forEach(({row, elm}) => {
-                  // заполнения разрывов пропускаем
+                  // заполнения разрывов печатаем вместе с остальными с 20250723
                   const ec = ox.coordinates.find({elm});
                   const cns = ox.constructions.find({cnstr: ec?.cnstr});
-                  if(cns?.kind === 4 || (cns && compositeRoot && !rootLayers.includes(cns.cnstr))) {
+                  if(cns && compositeRoot && !rootLayers.includes(cns.cnstr)) {
                     return;
                   }
                   const glass = project.draw_fragment({elm});
