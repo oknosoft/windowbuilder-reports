@@ -6,7 +6,9 @@
  * Created by Evgeniy Malyarov on 20.03.2019.
  */
 
-module.exports = function accumulation({adapters, accumulation, cat, job_prm}, log) {
+module.exports = function accumulation($p, log) {
+
+  const {adapters, accumulation, cat, job_prm} = $p;
 
   if(process.env.PGPASSWORD) {
     const dbs = [];
@@ -34,7 +36,7 @@ module.exports = function accumulation({adapters, accumulation, cat, job_prm}, l
       dbs,
       listeners: [
         // клон заказов
-        require('./calc_order_clone'),
+        require('./calc_order_clone')($p),
 
         // Расчеты с контрагентами
         // require('./calc_order_calculations'),                       // заказы

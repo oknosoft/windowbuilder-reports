@@ -13,12 +13,27 @@ function leftPad(str, len) {
   return str.substring(str.length - len);
 }
 
-module.exports = {
-  class_name,
-  listener(couch, acc, doc) {
-    const ref = doc._id.substring(15);
-    const {branch, abonent} = couch;
-    return acc.client.query(`INSERT INTO doc_calc_order (ref, _deleted, posted, date, number_doc, number_internal, project, organization, partner, client_of_dealer, contract, bank_account, note, manager, leading_manager, department, warehouse, doc_amount, amount_operation, amount_internal, accessory_characteristic, phone, delivery_area, shipping_address, coordinates, address_fields, vat_consider, vat_included, settlements_course, settlements_multiplicity, extra_charge_external, obj_delivery_state, category, production, extra_fields, contact_information, planning, branch, abonent)
+
+module.exports = function ({utils}) {
+  function decompress(raw) {
+    const {production} = raw;
+    if(typeof production === 'string') {
+      const {deflate} = utils;
+      return deflate.base64ToBufferAsync(production)
+        .then((uint8Array) => deflate.decompress(uint8Array))
+        .then(string => raw.production = JSON.parse(string));
+    }
+    return Promise.resolve(raw);
+  }
+
+  return {
+    class_name,
+    listener(couch, acc, raw) {
+      return decompress(raw)
+        .then((doc) => {
+          const ref = doc._id.substring(15);
+          const {branch, abonent} = couch;
+          return acc.client.query(`INSERT INTO doc_calc_order (ref, _deleted, posted, date, number_doc, number_internal, project, organization, partner, client_of_dealer, contract, bank_account, note, manager, leading_manager, department, warehouse, doc_amount, amount_operation, amount_internal, accessory_characteristic, phone, delivery_area, shipping_address, coordinates, address_fields, vat_consider, vat_included, settlements_course, settlements_multiplicity, extra_charge_external, obj_delivery_state, category, production, extra_fields, contact_information, planning, branch, abonent)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39)
       ON CONFLICT (ref) DO UPDATE SET
         _deleted = EXCLUDED._deleted,
@@ -57,48 +72,51 @@ module.exports = {
         extra_fields = EXCLUDED.extra_fields,
         contact_information = EXCLUDED.contact_information,
         planning = EXCLUDED.planning;`, [
-      ref,
-      doc._deleted || false,
-      doc.posted || false,
-      doc.date,
-      leftPad(doc.number_doc || '', 11),
-      (doc.number_internal || '').substring(0,20),
-      doc.project,
-      doc.organization,
-      doc.partner,
-      (doc.client_of_dealer || '').substring(0,255),
-      doc.contract,
-      doc.bank_account,
-      (doc.note || '').substring(0,255),
-      doc.manager,
-      doc.leading_manager,
-      doc.department,
-      doc.warehouse,
-      doc.doc_amount > 1e11 ? 1e11 : doc.doc_amount,
-      doc.amount_operation > 1e11 ? 1e11 : doc.amount_operation,
-      doc.amount_internal > 1e11 ? 1e11 : doc.amount_internal,
-      doc.accessory_characteristic,
-      (doc.phone || '').substring(0,255),
-      doc.delivery_area,
-      (doc.shipping_address || '').substring(0,255),
-      doc.coordinates,
-      doc.address_fields,
-      doc.vat_consider,
-      doc.vat_included,
-      doc.settlements_course,
-      doc.settlements_multiplicity,
-      doc.extra_charge_external,
-      doc.obj_delivery_state?.length > 25 ? '' : (doc.obj_delivery_state || ''),
-      doc.category?.length > 25 ? '' : (doc.category || ''),
-      {rows: doc.production || []},
-      {rows: doc.extra_fields || []},
-      {rows: doc.contact_information || []},
-      {rows: doc.planning || []},
-      doc.branch || branch.ref,
-      abonent.ref,
-    ]);
-  }
+            ref,
+            doc._deleted || false,
+            doc.posted || false,
+            doc.date,
+            leftPad(doc.number_doc || '', 11),
+            (doc.number_internal || '').substring(0,20),
+            doc.project,
+            doc.organization,
+            doc.partner,
+            (doc.client_of_dealer || '').substring(0,255),
+            doc.contract,
+            doc.bank_account,
+            (doc.note || '').substring(0,255),
+            doc.manager,
+            doc.leading_manager,
+            doc.department,
+            doc.warehouse,
+            doc.doc_amount > 1e11 ? 1e11 : doc.doc_amount,
+            doc.amount_operation > 1e11 ? 1e11 : doc.amount_operation,
+            doc.amount_internal > 1e11 ? 1e11 : doc.amount_internal,
+            doc.accessory_characteristic,
+            (doc.phone || '').substring(0,255),
+            doc.delivery_area,
+            (doc.shipping_address || '').substring(0,255),
+            doc.coordinates,
+            doc.address_fields,
+            doc.vat_consider,
+            doc.vat_included,
+            doc.settlements_course,
+            doc.settlements_multiplicity,
+            doc.extra_charge_external,
+            doc.obj_delivery_state?.length > 25 ? '' : (doc.obj_delivery_state || ''),
+            doc.category?.length > 25 ? '' : (doc.category || ''),
+            {rows: doc.production || []},
+            {rows: doc.extra_fields || []},
+            {rows: doc.contact_information || []},
+            {rows: doc.planning || []},
+            doc.branch || branch.ref,
+            abonent.ref,
+          ]);
+        });
+    }
+  };
 }
+
 
 /*
 
