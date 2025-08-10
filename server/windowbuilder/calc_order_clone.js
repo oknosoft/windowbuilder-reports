@@ -21,7 +21,10 @@ module.exports = function ({utils}) {
       const {deflate} = utils;
       return deflate.base64ToBufferAsync(production)
         .then((uint8Array) => deflate.decompress(uint8Array))
-        .then(string => raw.production = JSON.parse(string));
+        .then(string => {
+          raw.production = JSON.parse(string);
+          return raw;
+        });
     }
     return Promise.resolve(raw);
   }
