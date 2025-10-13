@@ -26,8 +26,21 @@ const fields = [
   'note'];
 const blank = '00000000-0000-0000-0000-000000000000';
 
-function apply_rls($and, branch) {
-  if(!branch || branch.empty()) return;
+function apply_rls($and, user) {
+  const {branch, subscribers} = user;
+  if(!branch || branch.empty()) {
+    const abonents = [blank];
+    for(const row of subscribers) {
+      if(!abonents.includes(row.abonent.valueOf())) {
+        abonents.push(row.abonent.valueOf());
+      }
+    }
+    Object.defineProperty($and, 'fin', {
+      enumerable: false,
+      value: `and (branch in (${abonents.split(',')}) or not (obj_delivery_state = 'Черновик')) `,
+    })
+    return;
+  }
 
   // по подразделению
   let filter;
@@ -168,7 +181,7 @@ class Conditions {
 module.exports = function (Proto) {
   return class Accumulation extends Proto {
 
-    find({selector, sort, ref, limit, skip = 0, represents}, {branch}) {
+    find({selector, sort, ref, limit, skip = 0, represents}, user) {
 
       if(!this.client || !this.client._connected) {
         const err = new Error('Индекс прочитан не полностью, повторите запрос позже');
@@ -179,7 +192,7 @@ module.exports = function (Proto) {
       let {$and, dfrom, dtill, class_name, search} = selector;
 
       // если указан отдел абонента, принудительно дополняем селектор
-      apply_rls($and, branch);
+      apply_rls($and, user);
 
       // извлекаем значения полей фильтра из селектора
       const conditions = new Conditions($and);
@@ -198,6 +211,10 @@ module.exports = function (Proto) {
 
       if(search) {
         search = `and fts @@ websearch_to_tsquery('${search}')`;
+      }
+
+      if($and.fin) {
+        search = $and.fin + search;
       }
 
       if(flag) {
