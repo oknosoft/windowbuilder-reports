@@ -37,7 +37,7 @@ function apply_rls($and, user) {
     }
     Object.defineProperty($and, 'fin', {
       enumerable: false,
-      value: `and (branch in (${abonents.split(',')}) or not (obj_delivery_state = 'Черновик')) `,
+      value: `and (branch in (${abonents.map(v => `'${v}'`).join(',')}) or not (obj_delivery_state = 'Черновик')) `,
     })
     return;
   }
