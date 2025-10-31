@@ -21,7 +21,7 @@ module.exports = function($p, log) {
     raw.selector = {$and: [], search: ''};
     for(const row of $and) {
       const fld = Object.keys(row)[0];
-      const cond = Object.keys(row[fld])[0];
+      const cond = typeof row[fld] === 'object' ? Object.keys(row[fld])[0] : null;
       if(fld === 'date') {
         if(cond === '$lt' || cond === '$lte') {
           raw.selector.dtill = row[fld][cond].replace(String.fromCharCode(65520), '');
@@ -44,7 +44,7 @@ module.exports = function($p, log) {
   }
 
   function local_rows(mgr, query) {
-    const {selector, sort, ref, limit, skip = 0, fullJSON} = query;
+    const {selector, sort, ref, limit, skip = 0, fields, fullJSON} = query;
     const {$and, dfrom, dtill, class_name, search} = selector;
     const select = {};
     if(sort) {
@@ -71,6 +71,13 @@ module.exports = function($p, log) {
     if(fullJSON) {
       pre.docs = pre.docs.map(({ref}) => mgr.get(ref).toJSON());
     }
+    else if(Array.isArray(fields)) {
+      pre.docs = pre.docs.map((v) => {
+        const part = {};
+        fields.forEach(fld => part[fld] = v[fld]);
+        return part;
+      });
+    }
     return pre;
   }
 
@@ -79,7 +86,7 @@ module.exports = function($p, log) {
     const mgr = separate(queryData);
     if(!mgr) {
       const err = new Error('Ошибка в class_name селектора запроса');
-      err.status = 403;
+      err.status = 404;
       throw err;
     }
     const rows = mgr.metadata().cachable === 'ram' ?
