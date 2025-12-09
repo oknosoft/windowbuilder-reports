@@ -24,6 +24,11 @@ module.exports = function reports($p, log, route = {}) {
     }
   }
 
+  if(!route.pgsql) {
+    route.pgsql = {};
+  }
+  route.pgsql.calculations = require('./accumulation/post')($p, log);
+
   return route.r;
 }
 

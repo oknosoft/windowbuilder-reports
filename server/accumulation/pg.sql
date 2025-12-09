@@ -172,7 +172,9 @@ CREATE TABLE public.doc_calc_order (
     planning jsonb,
     fts tsvector,
     branch uuid,
-    abonent uuid
+    abonent uuid,
+    shipped numeric(15,2),
+    paid numeric(15,2)
 );
 
 

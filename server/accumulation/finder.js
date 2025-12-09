@@ -23,7 +23,10 @@ const fields = [
   'amount_operation',
   'obj_delivery_state',
   'category',
-  'note'];
+  'note',
+  'shipped',
+  'paid'
+];
 const blank = '00000000-0000-0000-0000-000000000000';
 
 function apply_rls($and, user) {
