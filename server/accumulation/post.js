@@ -3,7 +3,7 @@ const NS_PER_SEC = 1e9;
 
 module.exports = function ($p, log) {
 
-  const {utils: {end: {end500, end404}, getBody}, accumulation: acc} = $p;
+  const {utils: {end: {end500}, blank, getBody}, accumulation: acc} = $p;
 
   return async (req, res) => {
     try{
@@ -18,8 +18,14 @@ module.exports = function ($p, log) {
       //register, register_type, row_num, period, sign, trans, partner, organization, amount
       const orders = new Set();
       const values = rows.map((v) => {
-        orders.add(v.trans);
-        return `('${register}', '${register_type}', ${v.row_num}, '${v.period}', ${v.sign}, '${v.trans}', '${v.partner}', '${v.organization}', ${v.amount})`
+        let {trans} = v;
+        if(trans && trans !== blank.guid) {
+          orders.add(trans);
+        }
+        else {
+          trans = blank.guid;
+        }
+        return `('${register}', '${register_type}', ${v.row_num}, '${v.period}', ${v.sign}, '${trans}', '${v.partner}', '${v.organization}', ${v.amount})`
       });
 
       const data = {ok: true};
