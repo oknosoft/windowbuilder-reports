@@ -40,7 +40,7 @@ module.exports = function ({utils}) {
           if(br.includes('|')) {
             br = br.split('|')[1];
           }
-          return acc.client.query(`INSERT INTO doc_calc_order (ref, _deleted, posted, date, number_doc, number_internal, project, organization, partner, client_of_dealer, contract, bank_account, note, manager, leading_manager, department, warehouse, doc_amount, amount_operation, amount_internal, accessory_characteristic, phone, delivery_area, shipping_address, coordinates, address_fields, vat_consider, vat_included, settlements_course, settlements_multiplicity, extra_charge_external, obj_delivery_state, category, production, extra_fields, contact_information, planning, branch)
+          return acc.client.query(`INSERT INTO doc_calc_order (ref, _deleted, posted, date, number_doc, number_internal, project, organization, partner, client_of_dealer, contract, bank_account, note, manager, leading_manager, department, warehouse, doc_amount, amount_operation, amount_internal, accessory_characteristic, phone, delivery_area, shipping_address, coordinates, address_fields, vat_consider, vat_included, settlements_course, settlements_multiplicity, extra_charge_external, obj_delivery_state, category, production, extra_fields, contact_information, planning, branch, abonent)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39)
       ON CONFLICT (ref) DO UPDATE SET
         _deleted = EXCLUDED._deleted,
@@ -79,6 +79,8 @@ module.exports = function ({utils}) {
         extra_fields = EXCLUDED.extra_fields,
         contact_information = EXCLUDED.contact_information,
         planning = EXCLUDED.planning,
+        branch = EXCLUDED.branch,
+		    abonent = EXCLUDED.abonent,
         shipped = EXCLUDED.shipped,
         paid = EXCLUDED.paid;`, [
           ref,
