@@ -2,7 +2,7 @@
 const addressFields = require('./addressFields');
 
 module.exports = function($p, log) {
-  const {utils: {getBody, end}, job_prm, cat: {partners, contracts, contact_information_kinds}, adapters: {pouch}} = $p;
+  const {utils: {getBody, end}, job_prm, cat: {partners, contracts, contact_information_kinds}, adapters: {pouch}, accumulation: acc} = $p;
 
   return async (req, res) => {
 
@@ -38,7 +38,7 @@ module.exports = function($p, log) {
         }
       }
       else if(method === 'PUT' || method === 'POST') {
-        const {raw, organization} = JSON.parse(await getBody(req));
+        const {raw, mode, partner, organization, trans} = JSON.parse(await getBody(req));
         if(raw) {
           const {inn, kpp, ogrn, okpo, okato, oktmo, okved, address, type, fio} = raw.data;
           const partner = partners.find({inn}) || partners.create({inn}, false, true);
@@ -73,6 +73,30 @@ module.exports = function($p, log) {
           const {_manager, _data, ref, class_name} = partner;
           await pouch.save_obj({_obj, _manager, _data, ref, class_name, is_new() {}, _set_loaded() {}}, {});
           res.end(JSON.stringify(_obj));
+        }
+        else {
+          if(partner && mode === 'balance') {
+            const pq = organization ?
+              await acc.client.query(`select sum(sign * amount) balance from areg_calculations where partner = $1 and organization = $2`, [partner, organization]) :
+              (trans ? await acc.client.query(`select sum(sign * amount) balance from areg_calculations where partner = $1 and trans = $2`, [partner, trans]) :
+                await acc.client.query(`select sum(sign * amount) balance from areg_calculations where partner = $1`, [partner]));
+            res.end(JSON.stringify({
+              ok: true,
+              balance: parseFloat(pq.rows[0].balance),
+            }));
+          }
+          else if(partner && mode === 'trans') {
+            const pq = await acc.client.query(`select trans, sum(sign * amount) balance from areg_calculations where partner = $1 group by trans having sum(sign * amount) <> 0`, [partner]);
+            res.end(JSON.stringify({
+              ok: true,
+              rows: pq.rows[0],
+            }));
+          }
+          else {
+            const err = new Error('Недостаточно параметров в теле запроса');
+            err.status = 404;
+            end.end500({res, err, log});
+          }
         }
       }
       else {
