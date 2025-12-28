@@ -89,7 +89,27 @@ module.exports = function($p, log) {
             const pq = await acc.client.query(`select trans, sum(sign * amount) balance from areg_calculations where partner = $1 group by trans having sum(sign * amount) <> 0`, [partner]);
             res.end(JSON.stringify({
               ok: true,
-              rows: pq.rows[0],
+              rows: pq.rows,
+            }));
+          }
+          else if(partner && mode === 'sheet') {
+            const pq = await acc.client.query(`select * from areg_calculations where partner = $1 order by period`, [partner]);
+            const keys = new Set();
+            for(const row of pq.rows) {
+              keys.add(`doc.calc_order|${row.trans}`);
+              keys.add(`${row.register_type}|${row.register}`);
+            }
+            const registers = await pouch.remote.doc.allDocs({
+              include_docs: true,
+              keys: Array.from(keys),
+            });
+            for(const row of pq.rows) {
+              const trans = registers.rows.find({id: `doc.calc_order|${row.trans}`});
+              const register = registers.rows.find({id: `${row.register_type}|${row.register}`});
+            }
+            res.end(JSON.stringify({
+              ok: true,
+              rows: pq.rows,
             }));
           }
           else {
