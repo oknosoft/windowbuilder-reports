@@ -116,9 +116,9 @@ module.exports = function($p, log) {
                 key: `${row.register}:${row.row_num}`,
                 trans: {
                   ref: row.trans,
-                  date: trans.doc.date,
-                  number_doc: trans.doc.number_doc,
-                  doc_amount: trans.doc.doc_amount,
+                  date: trans?.doc?.date,
+                  number_doc: trans?.doc?.number_doc,
+                  doc_amount: trans?.doc?.doc_amount,
                 },
                 register: {
                   type: row.register_type,
