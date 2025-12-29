@@ -103,9 +103,39 @@ module.exports = function($p, log) {
               include_docs: true,
               keys: Array.from(keys),
             });
+            let opening = 0, final = 0;
             for(const row of pq.rows) {
-              const trans = registers.rows.find({id: `doc.calc_order|${row.trans}`});
-              const register = registers.rows.find({id: `${row.register_type}|${row.register}`});
+              const trans = registers.rows.find((v) => v.id === `doc.calc_order|${row.trans}`);
+              const register = registers.rows.find((v) => v.id === `${row.register_type}|${row.register}`);
+              const amount = parseFloat(row.amount);
+              const shipped = row.sign > 0 ? amount : 0;
+              const paid = row.sign < 0 ? amount : 0;
+              opening = final;
+              final += row.sign * amount;
+              Object.assign(row, {
+                key: `${row.register}:${row.row_num}`,
+                trans: {
+                  ref: row.trans,
+                  date: trans.doc.date,
+                  number_doc: trans.doc.number_doc,
+                  doc_amount: trans.doc.doc_amount,
+                },
+                register: {
+                  type: row.register_type,
+                  ref: row.register,
+                  date: register.doc.date,
+                  number_doc: register.doc.number_doc,
+                  doc_amount: register.doc.doc_amount,
+                },
+                opening,
+                shipped,
+                paid,
+                final,
+              });
+              delete row.sign;
+              delete row.amount;
+              delete row.row_num;
+              delete row.register_type;
             }
             res.end(JSON.stringify({
               ok: true,
