@@ -67,6 +67,14 @@ module.exports = function($p, log) {
         value: search.trim().replace(/\s\s/g, ' ').split(' ').filter(v => v)
       };
     }
+    if(Array.isArray($and)) {
+      for(const cond of $and) {
+        const key = Object.keys(cond)[0];
+        if(key) {
+          select[key] = cond[key];
+        }
+      }
+    }
     const pre = _find_rows_with_sort.call(mgr, mgr.alatable, select);
     if(fullJSON) {
       pre.docs = pre.docs.map(({ref}) => mgr.get(ref).toJSON());
