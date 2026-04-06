@@ -121,6 +121,7 @@ module.exports = function($p, log) {
             Object.assign(result[ref], tmp.get(ox));
           }
 
+          const {leading_product, leading_elm} = ox;
           if(_obj.coordinates && _obj.coordinates.length){
 
             counter--;
@@ -137,7 +138,7 @@ module.exports = function($p, log) {
 
             // является ли изделие составным
             let compositeRoot, rootLayers;
-            if(ox.leading_product.empty() && job_prm.builder.separate_frame_layers) {
+            if(leading_product.empty() && job_prm.builder.separate_frame_layers) {
               const contours = ox.constructions.find_rows({parent: 0}).map(v => v._row);
               if(contours.length > 1) {
                 let min = Infinity;
@@ -231,6 +232,38 @@ module.exports = function($p, log) {
                 project.clear();
               });
           }
+          else if(!leading_product.empty()) {
+            if(leading_elm > 0) {
+              const erow = leading_product.coordinates.find({elm: leading_elm});
+              if(erow.elm_type?.is('glass')) {
+                const src = result[utils.snake_ref(leading_product.ref)];
+                const gkey = `g${leading_elm}`;
+                if(src?.imgs[gkey]) {
+                  result[ref].imgs[gkey] = src.imgs[gkey];
+                }
+                else {
+                  const cnstrs = [-erow.cnstr]
+                  let crow = leading_product.constructions.find({cnstr: erow.cnstr});
+                  while (crow.parent) {
+                    cnstrs.push(-crow.parent);
+                    crow = leading_product.constructions.find({cnstr: crow.parent});
+                  }
+                  for(const lx of prod){
+                    if(lx.leading_product === leading_product && cnstrs.includes(lx.leading_elm)) {
+                      const src = result[utils.snake_ref(lx.ref)];
+                      if(src?.imgs[gkey]) {
+                        result[ref].imgs[gkey] = src.imgs[gkey];
+                        break;
+                      }
+                    }
+                  }
+                }
+                if(!result[ref].imgs[gkey]) {
+                  log(`glass-order ${calc_order.number_doc} ${calc_order.ref}`);
+                }
+              }
+            }
+          }
 
         }
         catch(err) {
@@ -239,6 +272,7 @@ module.exports = function($p, log) {
       }
     }
 
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.end(JSON.stringify(result));
 
     Promise.resolve()
