@@ -39,6 +39,14 @@ module.exports = function($p, log) {
     }
   }
 
+  function subLayers(layer, set = new Set()) {
+    set.add(layer);
+    for(const sub of layer.contours) {
+      subLayers(sub, set);
+    }
+    return Array.from(set);
+  }
+
 
   // формирует json описания продукции с эскизами
   async function prod(req, res) {
@@ -70,6 +78,7 @@ module.exports = function($p, log) {
     }
     else{
       let counter = 8;
+      const imgsMap = new Map();
       for(const ox of prod){
 
         try {
@@ -122,7 +131,7 @@ module.exports = function($p, log) {
           }
 
           const {leading_product, leading_elm} = ox;
-          if(_obj.coordinates && _obj.coordinates.length){
+          if(_obj.coordinates?.length){
 
             counter--;
             if(counter < 0) {
@@ -139,10 +148,10 @@ module.exports = function($p, log) {
             // является ли изделие составным
             let compositeRoot, rootLayers;
             if(leading_product.empty() && job_prm.builder.separate_frame_layers) {
-              const contours = ox.constructions.find_rows({parent: 0}).map(v => v._row);
-              if(contours.length > 1) {
+              const cntrs = ox.constructions.find_rows({parent: 0}).map(v => v._row);
+              if(cntrs.length > 1) {
                 let min = Infinity;
-                for(const layer of contours) {
+                for(const layer of cntrs) {
                   if(layer.cnstr < min) {
                     min = layer.cnstr;
                     compositeRoot = layer;
@@ -159,78 +168,129 @@ module.exports = function($p, log) {
               }
             }
 
-            await project.load(ox, Object.assign({}, ox.builder_props, builder_props, redraw))
-              .then(() => {
-                // если это составное изделие, эскизы немного другие
-                if(compositeRoot) {
-                  if(format.includes('png')) {
-                    result[ref].imgs.lc = view.element.toBuffer().toString('base64');
+            if(leading_product.empty()) {
+              await project.load(ox, Object.assign({}, ox.builder_props, builder_props, redraw))
+                .then(() => {
+                  // если это составное изделие, эскизы немного другие
+                  if(compositeRoot) {
+                    if(format.includes('png')) {
+                      result[ref].imgs.lc = view.element.toBuffer().toString('base64');
+                    }
+                    if(format.includes('svg')) {
+                      result[ref].imgs.sc = project.get_svg();
+                    }
+                    project.draw_fragment({elm: -rootLayers[0], layers: rootLayers});
+                    if(format.includes('png')) {
+                      result[ref].imgs.l0 = view.element.toBuffer().toString('base64');
+                    }
+                    if(format.includes('svg')) {
+                      result[ref].imgs.s0 = project.get_svg();
+                    }
                   }
-                  if(format.includes('svg')) {
-                    result[ref].imgs.sc = project.get_svg();
+                  else {
+                    if(format.includes('png')) {
+                      result[ref].imgs.l0 = view.element.toBuffer().toString('base64');
+                    }
+                    if(format.includes('svg')) {
+                      result[ref].imgs.s0 = project.get_svg();
+                    }
                   }
-                  project.draw_fragment({elm: -rootLayers[0], layers: rootLayers});
-                  if(format.includes('png')) {
-                    result[ref].imgs.l0 = view.element.toBuffer().toString('base64');
-                  }
-                  if(format.includes('svg')) {
-                    result[ref].imgs.s0 = project.get_svg();
-                  }
-                }
-                else {
-                  if(format.includes('png')) {
-                    result[ref].imgs.l0 = view.element.toBuffer().toString('base64');
-                  }
-                  if(format.includes('svg')) {
-                    result[ref].imgs.s0 = project.get_svg();
-                  }
-                }
-              })
-              .then(() => {
-                ox.constructions.forEach(({cnstr}) => {
-                  if(compositeRoot && !rootLayers.includes(cnstr)) {
-                    return;
-                  }
-                  project.draw_fragment({elm: -cnstr});
-                  if(format.includes('png')) {
-                    result[ref].imgs[`l${cnstr}`] = view.element.toBuffer().toString('base64');
-                  }
-                  if(format.includes('svg')) {
-                    result[ref].imgs[`s${cnstr}`] = project.get_svg();
-                  }
+                })
+                .then(() => {
+                  const contours = project.getItems({class: Editor.Contour});
+                  ox.constructions.forEach(({cnstr}) => {
+                    let {imgs} = result[ref];
+                    if(compositeRoot && !rootLayers.includes(cnstr)) {
+                      const layer = project.getItem({cnstr});
+                      const {prod_ox} = layer;
+                      if(prod_ox !== ox) {
+                        const prod_ref = utils.snake_ref(prod_ox.ref);
+                        if(!imgsMap.has(prod_ox)) {
+                          imgsMap.set(prod_ox, {imgs: {}, glasses: prod_ox._obj.glasses || []});
+                        }
+                        imgs = (result[prod_ref] || imgsMap.get(prod_ox)).imgs;
+                        if(!imgs.l0 && !imgs.s0) {
+                          const layers = subLayers(layer);
+                          for(const contour of contours) {
+                            contour.hidden = !layers.includes(contour);
+                            if(!contour.hidden) {
+                              layer.hide_generatrix();
+                            }
+                          }
+                          layer.l_dimensions.redraw(true, true);
+                          const bounds = layer.strokeBounds.unite(layer.l_dimensions.strokeBounds);
+                          project.zoom_fit(bounds);
+                          project.view.update();
+                          if(format.includes('png')) {
+                            imgs.l0 = view.element.toBuffer().toString('base64');
+                          }
+                          if(format.includes('svg')) {
+                            imgs.s0 = layer.get_svg();
+                          }
+                          layer.l_dimensions.redraw(true);
+                        }
+                      }
+                    }
+
+                    project.draw_fragment({elm: -cnstr});
+                    if(format.includes('png')) {
+                      imgs[`l${cnstr}`] = view.element.toBuffer().toString('base64');
+                    }
+                    if(format.includes('svg')) {
+                      imgs[`s${cnstr}`] = project.get_svg();
+                    }
+                  });
+                })
+                .then(() => {
+                  ox.glasses.forEach(({row, elm}) => {
+                    // заполнения разрывов печатаем вместе с остальными с 20250723
+                    const ec = ox.coordinates.find({elm});
+                    const cns = ox.constructions.find({cnstr: ec?.cnstr});
+                    let {imgs, glasses} = result[ref];
+                    if(cns && compositeRoot && !rootLayers.includes(cns.cnstr)) {
+                      const layer = project.getItem({cnstr: cns.cnstr});
+                      const {prod_ox} = layer;
+                      if(prod_ox !== ox) {
+                        const prod_ref = utils.snake_ref(prod_ox.ref);
+                        imgs = (result[prod_ref] || imgsMap.get(prod_ox)).imgs;
+                        glasses = (result[prod_ref] || imgsMap.get(prod_ox)).glasses;
+                      }
+                    }
+                    let glass = project.draw_fragment({elm});
+                    if(cns?.kind === 4) {
+                      glass = project.getItem({elm});
+                      glass?.draw_fragment();
+                    }
+                    // подтянем формулу стеклопакета
+                    if(format.includes('png')) {
+                      imgs[`g${elm}`] = view.element.toBuffer().toString('base64');
+                    }
+                    if(format.includes('svg')) {
+                      imgs[`sg${elm}`] = project.get_svg();
+                    }
+                    if(glass){
+                      const glRow = glasses.find(v => v.elm === elm);
+                      if(glRow) {
+                        glRow.formula = glass.formula(true);
+                      }
+                      glass.visible = false;
+                    }
+                  });
+                })
+                .then(() => {
+                  ox._data._modified = false;
+                  project.ox = null;
+                  project.clear();
                 });
-              })
-              .then(() => {
-                ox.glasses.forEach(({row, elm}) => {
-                  // заполнения разрывов печатаем вместе с остальными с 20250723
-                  const ec = ox.coordinates.find({elm});
-                  const cns = ox.constructions.find({cnstr: ec?.cnstr});
-                  if(cns && compositeRoot && !rootLayers.includes(cns.cnstr)) {
-                    return;
-                  }
-                  let glass = project.draw_fragment({elm});
-                  if(cns?.kind === 4) {
-                    glass = project.getItem({elm});
-                    glass?.draw_fragment();
-                  }
-                  // подтянем формулу стеклопакета
-                  if(format.includes('png')) {
-                    result[ref].imgs[`g${elm}`] = view.element.toBuffer().toString('base64');
-                  }
-                  if(format.includes('svg')) {
-                    result[ref].imgs[`sg${elm}`] = project.get_svg();
-                  }
-                  if(glass){
-                    result[ref].glasses[row - 1].formula = glass.formula(true);
-                    glass.visible = false;
-                  }
-                });
-              })
-              .then(() => {
-                ox._data._modified = false;
-                project.ox = null;
-                project.clear();
-              });
+            }
+            else {
+              const {imgs} = imgsMap.get(ox) || {};
+              if(imgs) {
+                for (const fld in imgs) {
+                  result[ref].imgs[fld] = imgs[fld];
+                }
+              }
+            }
           }
           else if(!leading_product.empty()) {
             if(leading_elm > 0) {
@@ -262,6 +322,9 @@ module.exports = function($p, log) {
                   log(`glass-order ${calc_order.number_doc} ${calc_order.ref}`);
                 }
               }
+            }
+            else if(leading_elm < 0) {
+
             }
           }
 
