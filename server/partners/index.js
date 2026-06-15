@@ -38,7 +38,7 @@ module.exports = function($p, log) {
         }
       }
       else if(method === 'PUT' || method === 'POST') {
-        const {raw, mode, partner, organization, trans} = JSON.parse(await getBody(req));
+        const {raw, mode, partner, organization, department, trans} = JSON.parse(await getBody(req));
         if(raw) {
           const {inn, kpp, ogrn, okpo, okato, oktmo, okved, address, type, fio} = raw.data;
           const partner = partners.find({inn}) || partners.create({inn}, false, true);
@@ -50,11 +50,14 @@ module.exports = function($p, log) {
             partner.contact_information.add(addressFields(address, contact_information_kinds));
           }
           if(organization) {
-            let contract = contracts.find({owner: partner.ref, organization});
+            const selection = {owner: partner.ref, organization};
+            if(department) {
+              selection.department = department;
+            }
+            let contract = contracts.find(selection);
             if(!contract) {
               contract = contracts.create({
-                owner: partner.ref,
-                organization,
+                ...selection,
                 name: 'Основной',
                 mutual_settlements: "ПоЗаказам",
                 contract_kind: "СПокупателем",
