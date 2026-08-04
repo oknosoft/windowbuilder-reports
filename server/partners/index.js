@@ -38,7 +38,7 @@ module.exports = function($p, log) {
         }
       }
       else if(method === 'PUT' || method === 'POST') {
-        const {raw, mode, partner, organization, department, trans} = JSON.parse(await getBody(req));
+        const {raw, mode, partner, organization, department, trans, ref, prepayment_percent, ...other} = JSON.parse(await getBody(req));
         if(raw) {
           const {inn, kpp, ogrn, okpo, okato, oktmo, okved, address, type, fio} = raw.data;
           const partner = partners.find({inn}) || partners.create({inn}, false, true);
@@ -62,8 +62,17 @@ module.exports = function($p, log) {
                 mutual_settlements: "ПоЗаказам",
                 contract_kind: "СПокупателем",
                 settlements_currency: job_prm.pricing?.main_currency?.ref,
+                main_cash_flow_article: job_prm.pricing?.sale_article?.ref,
+                prepayment_percent: prepayment_percent || 100,
               }, false, true);
-              if(contract.organization.individual_legal.is('ЮрЛицо')) {
+              const {organization} = contract;
+              if(organization.vat && !organization.vat.empty()) {
+                if(!organization.vat.is('БезНДС') && !organization.vat.is('Нулевая')) {
+                  contract.vat_consider = true;
+                  contract.vat_included = true;
+                }
+              }
+              else if(organization.individual_legal.is('ЮрЛицо')) {
                 contract.vat_consider = true;
                 contract.vat_included = true;
               }
@@ -77,8 +86,8 @@ module.exports = function($p, log) {
           await pouch.save_obj({_obj, _manager, _data, ref, class_name, is_new() {}, _set_loaded() {}}, {});
           res.end(JSON.stringify(_obj));
         }
-        else {
-          if(partner && mode === 'balance') {
+        else if(partner) {
+          if(mode === 'balance') {
             const pq = organization ?
               await acc.client.query(`select sum(sign * amount) balance from areg_calculations where partner = $1 and organization = $2`, [partner, organization]) :
               (trans ? await acc.client.query(`select sum(sign * amount) balance from areg_calculations where partner = $1 and trans = $2`, [partner, trans]) :
@@ -88,14 +97,14 @@ module.exports = function($p, log) {
               balance: parseFloat(pq.rows[0].balance),
             }));
           }
-          else if(partner && mode === 'trans') {
+          else if(mode === 'trans') {
             const pq = await acc.client.query(`select trans, sum(sign * amount) balance from areg_calculations where partner = $1 group by trans having sum(sign * amount) <> 0`, [partner]);
             res.end(JSON.stringify({
               ok: true,
               rows: pq.rows,
             }));
           }
-          else if(partner && mode === 'sheet') {
+          else if(mode === 'sheet') {
             const pq = await acc.client.query(`select * from areg_calculations where partner = $1 order by period`, [partner]);
             const keys = new Set();
             for(const row of pq.rows) {
@@ -145,11 +154,41 @@ module.exports = function($p, log) {
               rows: pq.rows,
             }));
           }
-          else {
-            const err = new Error('Недостаточно параметров в теле запроса');
-            err.status = 404;
-            end.end500({res, err, log});
+          else if(mode === 'contract' && ref) {
+            const contract = contracts.create({ref, organization, department, ...other, prepayment_percent}, false, true);
+            if(contract.is_new()) {
+              Object.assign(contract, {
+                mutual_settlements: "ПоЗаказам",
+                contract_kind: "СПокупателем",
+                settlements_currency: job_prm.pricing?.main_currency?.ref,
+                main_cash_flow_article: job_prm.pricing?.sale_article?.ref,
+              });
+              contract._set_loaded();
+            }
+            else {
+              Object.assign(contract, {organization, department, ...other, prepayment_percent});
+            }
+            const {organization: org, owner} = contract;
+            if(org.vat && !org.vat.empty()) {
+              if(!org.vat.is('БезНДС') && !org.vat.is('Нулевая')) {
+                contract.vat_consider = true;
+                contract.vat_included = true;
+              }
+            }
+            else if(org.individual_legal.is('ЮрЛицо')) {
+              contract.vat_consider = true;
+              contract.vat_included = true;
+            }
+            const _obj = owner.toJSON();
+            const {_manager, _data, class_name} = owner;
+            await pouch.save_obj({_obj, _manager, _data, ref: owner.ref, class_name, is_new() {}, _set_loaded() {}}, {});
+            res.end(JSON.stringify(_obj));
           }
+        }
+        if(!res.finished) {
+          const err = new Error('Недостаточно параметров в теле запроса');
+          err.status = 404;
+          end.end500({res, err, log});
         }
       }
       else {
