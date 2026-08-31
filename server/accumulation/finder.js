@@ -25,7 +25,8 @@ const fields = [
   'category',
   'note',
   'shipped',
-  'paid'
+  'paid',
+  'tasked',
 ];
 const blank = '00000000-0000-0000-0000-000000000000';
 
